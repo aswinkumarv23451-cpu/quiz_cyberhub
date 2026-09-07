@@ -16,12 +16,18 @@ export const apiClient = async (endpoint, options = {}) => {
   };
 
   const config = {
+    credentials: 'include',
     ...options,
     headers: {
       ...defaultHeaders,
       ...options.headers,
     },
   };
+
+  // If body is FormData, let browser set multipart Content-Type with boundary
+  if (options.body instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
 
   try {
     const response = await fetch(url, config);
