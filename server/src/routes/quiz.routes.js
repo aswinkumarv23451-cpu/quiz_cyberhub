@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, requireTeamLead } from '../middleware/auth.middleware.js';
+import { rateLimitQuiz } from '../middleware/rateLimit.middleware.js';
 import {
   handleStartQuiz,
   handleGetCurrentQuiz,
@@ -19,9 +20,10 @@ router.post('/start', handleStartQuiz);
 router.get('/current', handleGetCurrentQuiz);
 
 // POST /api/quiz/answer
-router.post('/answer', handleSubmitAnswer);
+// Hardened with quiz submission rate limiting (300 req/min/IP) to support concurrent teams on shared IP
+router.post('/answer', rateLimitQuiz, handleSubmitAnswer);
 
 // POST /api/quiz/skip
-router.post('/skip', handleSkipQuestion);
+router.post('/skip', rateLimitQuiz, handleSkipQuestion);
 
 export default router;

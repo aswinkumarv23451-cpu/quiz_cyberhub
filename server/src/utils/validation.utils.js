@@ -62,3 +62,17 @@ export const validateRegisterNumber = (regNo) => {
   }
   return trimmed;
 };
+
+// UUID v4 regex pattern for strict identifier validation
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Validates whether a string is a well-formed UUID.
+ *
+ * @param {string} id
+ * @returns {boolean}
+ */
+export const isValidUUID = (id) => {
+  return typeof id === 'string' && UUID_REGEX.test(id);
+};
+

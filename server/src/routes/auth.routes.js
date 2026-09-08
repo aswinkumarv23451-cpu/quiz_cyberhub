@@ -6,14 +6,19 @@ import {
   getMeHandler,
 } from '../controllers/auth.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
+import {
+  rateLimitOtpRequest,
+  rateLimitOtpVerify,
+} from '../middleware/rateLimit.middleware.js';
 
 const router = express.Router();
 
 /**
  * Public Authentication Routes
+ * Hardened with IP-based rate limiting while preserving per-account cooldowns.
  */
-router.post('/request-otp', requestOtpHandler);
-router.post('/verify-otp', verifyOtpHandler);
+router.post('/request-otp', rateLimitOtpRequest, requestOtpHandler);
+router.post('/verify-otp', rateLimitOtpVerify, verifyOtpHandler);
 router.post('/logout', logoutHandler);
 
 /**

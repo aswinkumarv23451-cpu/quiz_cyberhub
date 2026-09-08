@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { config } from './config/env.js';
+import { securityHeaders } from './middleware/securityHeaders.middleware.js';
 import healthRoutes from './routes/health.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import registrationRoutes from './routes/registration.routes.js';
@@ -12,7 +13,13 @@ import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
 
-// Configure CORS with credentials support for HttpOnly cookies
+// Disable Express technology fingerprinting
+app.disable('x-powered-by');
+
+// Enforce standard defensive HTTP security headers
+app.use(securityHeaders);
+
+// Configure CORS with explicit configured origin and credentials support for HttpOnly cookies
 app.use(
   cors({
     origin: config.corsOrigin,
@@ -22,8 +29,8 @@ app.use(
   })
 );
 
-// Middleware for parsing JSON requests
-app.use(express.json());
+// Middleware for parsing JSON requests with explicit size limit (prevents payload memory exhaustion)
+app.use(express.json({ limit: '500kb' }));
 
 // Middleware for parsing cookies
 app.use(cookieParser());
@@ -38,7 +45,7 @@ app.use('/api/quiz', quizRoutes);
 // 404 Handler for undefined routes
 app.use(notFoundHandler);
 
-// Global Error Handler
+// Global Error Handler (sanitizes production errors and formats status codes)
 app.use(errorHandler);
 
 export default app;

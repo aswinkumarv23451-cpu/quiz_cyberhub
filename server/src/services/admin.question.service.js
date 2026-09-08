@@ -616,7 +616,7 @@ export const deleteQuestion = async (questionId) => {
       message: 'Question deleted successfully.',
     };
   } catch (err) {
-    try { await client.query('ROLLBACK'); } catch (_) {}
+    try { await client.query('ROLLBACK'); } catch (_) { }
     throw err;
   } finally {
     client.release();
@@ -631,7 +631,7 @@ export const deleteQuestion = async (questionId) => {
  * @param {Array<string>} questionIds - Array of question UUIDs in new sequential order
  * @returns {Promise<Object>}
  */
-export const reorderQuestions = async (questionIds) => {
+/*export const reorderQuestions = async (questionIds) => {
   if (!Array.isArray(questionIds) || questionIds.length === 0) {
     const err = new Error('questionIds must be a non-empty array of question identifiers.');
     err.statusCode = 400;
@@ -700,20 +700,27 @@ export const reorderQuestions = async (questionIds) => {
       [activeEvent.id]
     );
 
-    // Step 2: Assign new 1-based sequential orders atomically
-    const cases = questionIds
-      .map((id, index) => `WHEN id = '${id}' THEN ${index + 1}`)
-      .join(' ');
+    // Step 2: Assign new 1-based sequential orders atomically using fully parameterized SQL
+    const cases = [];
+    const queryParams = [activeEvent.id];
+
+    questionIds.forEach((id, index) => {
+      queryParams.push(id);
+      const idParamIndex = queryParams.length;
+      queryParams.push(index + 1);
+      const orderParamIndex = queryParams.length;
+      cases.push(`WHEN id = $${idParamIndex} THEN $${orderParamIndex}`);
+    });
 
     const reorderSql = `
       UPDATE questions
       SET question_order = CASE
-        ${cases}
+        ${cases.join(' ')}
       END
       WHERE event_id = $1;
     `;
 
-    await client.query(reorderSql, [activeEvent.id]);
+    await client.query(reorderSql, queryParams);
     await client.query('COMMIT');
 
     return {
@@ -736,6 +743,122 @@ export const reorderQuestions = async (questionIds) => {
  *
  * @returns {Promise<{ valid: boolean, questionCount: number, errors: Array<string> }>}
  */
+export const reorderQuestions = async (questionIds) => {
+  if (!Array.isArray(questionIds) || questionIds.length === 0) {
+    const err = new Error('questionIds must be a non-empty array of question identifiers.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  for (const id of questionIds) {
+    if (!isValidUUID(id)) {
+      const err = new Error(`Invalid question identifier: ${id}`);
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  const uniqueIds = new Set(questionIds);
+  if (uniqueIds.size !== questionIds.length) {
+    const err = new Error('Duplicate question IDs in reorder request.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const activeEvent = await getActiveEvent();
+  assertEventIsReady(activeEvent);
+
+  const client = await getClient();
+
+  try {
+    await client.query('BEGIN');
+
+    const existingSql = `
+      SELECT id
+      FROM questions
+      WHERE event_id = $1
+      FOR UPDATE;
+    `;
+
+    const { rows: existingRows } = await client.query(existingSql, [
+      activeEvent.id,
+    ]);
+
+    const existingIds = new Set(existingRows.map((row) => row.id));
+
+    if (existingIds.size !== questionIds.length) {
+      const err = new Error(
+        `Reorder set mismatch: expected ${existingIds.size} questions, received ${questionIds.length}.`
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+
+    for (const id of questionIds) {
+      if (!existingIds.has(id)) {
+        const err = new Error(
+          'Reorder failed: all questions must belong to the active competition event.'
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
+    /*
+     * Move all existing orders into a temporary range first.
+     * This preserves the UNIQUE(event_id, question_order) constraint.
+     */
+    await client.query(
+      `
+        UPDATE questions
+        SET question_order = question_order + 1000000
+        WHERE event_id = $1;
+      `,
+      [activeEvent.id]
+    );
+
+    /*
+     * Assign the requested 1-based order.
+     * Each row is updated individually, so the unique constraint
+     * never sees two questions with the same final order.
+     */
+    for (let index = 0; index < questionIds.length; index += 1) {
+      await client.query(
+        `
+          UPDATE questions
+          SET question_order = $1
+          WHERE id = $2
+            AND event_id = $3;
+        `,
+        [index + 1, questionIds[index], activeEvent.id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    return {
+      success: true,
+      message: 'Questions reordered successfully.',
+      totalReordered: questionIds.length,
+    };
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) { }
+
+    if (err.code === '23505') {
+      const error = new Error(
+        'Question order must be unique within the event.'
+      );
+      error.statusCode = 409;
+      throw error;
+    }
+
+    throw err;
+  } finally {
+    client.release();
+  }
+};
 export const validateQuestionBank = async () => {
   const event = await getActiveEvent();
   const errors = [];
