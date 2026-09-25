@@ -4,6 +4,7 @@ import { requestOtp, verifyOtp, logout, getMe } from './services/authService';
 import { getRegistrationEvent, registerTeam } from './services/registrationService';
 import AdminDashboard from './components/AdminDashboard';
 import QuizInterface from './components/QuizInterface';
+import PublicLandingPage from './components/landing/PublicLandingPage';
 
 function App() {
   // Navigation: 'login' | 'register'
@@ -258,497 +259,46 @@ function App() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-950 text-slate-100 font-sans">
-      <div className="max-w-xl w-full space-y-6 bg-slate-900/80 p-6 md:p-8 rounded-xl border border-slate-800 shadow-2xl">
-        {/* Header */}
-        <div className="text-center space-y-1">
-          <h1 className="text-3xl font-extrabold tracking-tight text-indigo-400">
-            Round 1 Competition
-          </h1>
-          <p className="text-sm text-slate-400">
-            Technology Competition Platform
-          </p>
-        </div>
-
-        {/* Tab Switcher */}
-        {!session && (
-          <div className="flex border-b border-slate-800">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('login');
-                setRegMessage(null);
-              }}
-              className={`flex-1 py-2 text-sm font-semibold text-center border-b-2 transition ${
-                activeTab === 'login'
-                  ? 'border-indigo-500 text-indigo-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-300'
-              }`}
-            >
-              Sign In (OTP)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('register');
-                setLoginMessage(null);
-              }}
-              className={`flex-1 py-2 text-sm font-semibold text-center border-b-2 transition ${
-                activeTab === 'register'
-                  ? 'border-indigo-500 text-indigo-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-300'
-              }`}
-            >
-              Register Team
-            </button>
-          </div>
-        )}
-
-        {/* ----------------- TAB 1: LOGIN (MODULE 3) ----------------- */}
-        {activeTab === 'login' && (
-          <div className="space-y-4">
-            {loginMessage && (
-              <div
-                className={`p-3 rounded text-sm border ${
-                  loginMessage.type === 'success'
-                    ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
-                    : 'bg-rose-950/60 text-rose-300 border-rose-800'
-                }`}
-              >
-                {loginMessage.text}
-              </div>
-            )}
-
-            {isCheckingAuth ? (
-              <div className="text-center py-6 text-slate-400 text-sm">
-                Verifying session...
-              </div>
-            ) : session ? (
-              <div className="space-y-4 bg-slate-950/60 p-5 rounded-lg border border-slate-800">
-                <div className="border-b border-slate-800 pb-3">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-                    Authenticated Session
-                  </span>
-                  <h2 className="text-lg font-bold text-slate-200 mt-1">
-                    {session.user?.name || 'User'}
-                  </h2>
-                  <p className="text-sm text-slate-400">{session.user?.email}</p>
-                </div>
-
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">Assigned Role:</span>
-                    <span className="font-mono font-bold text-indigo-300">
-                      {session.role}
-                    </span>
-                  </div>
-                  {session.team && (
-                    <div className="flex justify-between py-1 border-b border-slate-850">
-                      <span className="text-slate-400">Team:</span>
-                      <span className="font-medium text-slate-300">
-                        {session.team.name}
-                      </span>
-                    </div>
-                  )}
-                  {session.event && (
-                    <div className="flex justify-between py-1">
-                      <span className="text-slate-400">Event Status:</span>
-                      <span className="font-medium text-emerald-400">
-                        {session.event.status}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  onClick={handleLogout}
-                  disabled={loginLoading}
-                  className="w-full mt-4 py-2 px-4 bg-slate-800 hover:bg-slate-750 text-slate-200 text-sm font-medium rounded-md border border-slate-700 transition"
-                >
-                  {loginLoading ? 'Signing out...' : 'Sign Out'}
-                </button>
-              </div>
-            ) : loginStep === 'email' ? (
-              <form onSubmit={handleRequestOtp} className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="email"
-                    className="block text-xs font-medium text-slate-300 mb-1"
-                  >
-                    Registered Email Address
-                  </label>
-                  <input
-                    id="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="lead@college.edu"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-md text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loginLoading || !email.trim()}
-                  className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium rounded-md transition"
-                >
-                  {loginLoading ? 'Sending code...' : 'Request Verification Code'}
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={handleVerifyOtp} className="space-y-4">
-                <div className="text-xs text-slate-400">
-                  Enter the 6-digit verification code sent to{' '}
-                  <span className="text-indigo-300 font-medium">{email}</span>.
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="otp"
-                    className="block text-xs font-medium text-slate-300 mb-1"
-                  >
-                    Verification Code
-                  </label>
-                  <input
-                    id="otp"
-                    type="text"
-                    required
-                    maxLength={6}
-                    pattern="[0-9]{6}"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    placeholder="123456"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-md text-slate-100 font-mono text-center tracking-widest text-lg placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loginLoading || otp.trim().length !== 6}
-                  className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium rounded-md transition"
-                >
-                  {loginLoading ? 'Verifying...' : 'Verify Code & Sign In'}
-                </button>
-
-                <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginStep('email');
-                      setOtp('');
-                    }}
-                    className="hover:text-slate-200 transition"
-                  >
-                    ← Change email
-                  </button>
-                  <button
-                    type="button"
-                    disabled={cooldown > 0 || loginLoading}
-                    onClick={handleRequestOtp}
-                    className="hover:text-indigo-400 disabled:opacity-40 transition"
-                  >
-                    {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        )}
-
-        {/* ----------------- TAB 2: TEAM REGISTRATION (MODULE 4) ----------------- */}
-        {activeTab === 'register' && (
-          <div className="space-y-4">
-            {regMessage && (
-              <div
-                className={`p-3 rounded text-sm border ${
-                  regMessage.type === 'success'
-                    ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
-                    : 'bg-rose-950/60 text-rose-300 border-rose-800'
-                }`}
-              >
-                {regMessage.text}
-              </div>
-            )}
-
-            {regEventInfo.loading ? (
-              <div className="text-center py-6 text-slate-400 text-sm">
-                Checking event registration status...
-              </div>
-            ) : !regEventInfo.open ? (
-              <div className="bg-amber-950/40 border border-amber-800 text-amber-300 p-4 rounded-lg text-sm text-center">
-                Team registration is currently closed for upcoming competitions.
-              </div>
-            ) : registrationSuccess ? (
-              /* Success Confirmation (No internal IDs exposed) */
-              <div className="bg-slate-950/70 border border-emerald-800/80 p-5 rounded-lg space-y-4">
-                <div className="border-b border-slate-800 pb-3">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-                    Registration Submitted
-                  </span>
-                  <h3 className="text-xl font-bold text-slate-100 mt-1">
-                    {registrationSuccess.teamName}
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    {registrationSuccess.college} • {registrationSuccess.department}
-                  </p>
-                </div>
-
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">Status:</span>
-                    <span className="font-semibold text-amber-400">
-                      {registrationSuccess.registrationStatus}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">Members Registered:</span>
-                    <span className="font-medium text-slate-200">
-                      {registrationSuccess.memberCount}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">Registration Fee:</span>
-                    <span className="font-mono text-emerald-400 font-bold">
-                      FREE
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">WhatsApp Group:</span>
-                    <span className="font-medium text-emerald-400">
-                      Confirmed Joined
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-xs text-slate-400 bg-slate-900 p-3 rounded border border-slate-800">
-                  Your registration has been submitted for administrative verification. Once approved, the designated Team Lead can sign in using their registered email. Competition instructions and announcements will be shared in the official WhatsApp group.
-                </div>
-
-                <button
-                  type="button"
-                  onClick={resetRegistrationForm}
-                  className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-md transition"
-                >
-                  Register Another Team
-                </button>
-              </div>
-            ) : (
-              /* Registration Form */
-              <form onSubmit={handleRegisterSubmit} className="space-y-5">
-                {/* Event Tag */}
-                <div className="text-xs text-indigo-300 bg-indigo-950/40 p-2.5 rounded border border-indigo-900/60">
-                  Event: <span className="font-semibold text-indigo-200">{regEventInfo.data?.name}</span> (Free Entry)
-                </div>
-
-                {/* Team Details */}
-                <div className="space-y-3 bg-slate-950/40 p-3.5 rounded-lg border border-slate-850">
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                    Team Information
-                  </h4>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">Team Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={teamName}
-                      onChange={(e) => setTeamName(e.target.value)}
-                      placeholder="e.g. Cyber Ninjas"
-                      className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-slate-400 mb-1">College</label>
-                      <input
-                        type="text"
-                        required
-                        value={college}
-                        onChange={(e) => setCollege(e.target.value)}
-                        placeholder="e.g. PSG Tech"
-                        className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-400 mb-1">Department</label>
-                      <input
-                        type="text"
-                        required
-                        value={department}
-                        onChange={(e) => setDepartment(e.target.value)}
-                        placeholder="e.g. CSE / IT"
-                        className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Members Section */}
-                <div className="space-y-4 bg-slate-950/40 p-3.5 rounded-lg border border-slate-850">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                      Team Members (2 or 3)
-                    </h4>
-                    <span className="text-xs text-slate-400">
-                      Designate 1 Team Lead
-                    </span>
-                  </div>
-
-                  {members.map((m, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 bg-slate-900/60 rounded border border-slate-800 space-y-2.5"
-                    >
-                      <div className="flex items-center justify-between text-xs border-b border-slate-800 pb-1.5">
-                        <span className="font-semibold text-slate-300">
-                          Member {idx + 1}
-                        </span>
-                        <label className="flex items-center space-x-1.5 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="teamLeadSelector"
-                            checked={m.isLead}
-                            onChange={() => handleSetLead(idx)}
-                            className="text-indigo-600 focus:ring-0"
-                          />
-                          <span
-                            className={`text-xs ${
-                              m.isLead ? 'text-indigo-400 font-bold' : 'text-slate-400'
-                            }`}
-                          >
-                            Team Lead
-                          </span>
-                        </label>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                        <input
-                          type="text"
-                          required
-                          placeholder="Full Name"
-                          value={m.name}
-                          onChange={(e) => handleMemberChange(idx, 'name', e.target.value)}
-                          className="px-2.5 py-1.5 bg-slate-950 border border-slate-750 rounded text-slate-100 placeholder-slate-600 focus:border-indigo-500 focus:outline-none"
-                        />
-                        <input
-                          type="email"
-                          required
-                          placeholder="Email Address"
-                          value={m.email}
-                          onChange={(e) => handleMemberChange(idx, 'email', e.target.value)}
-                          className="px-2.5 py-1.5 bg-slate-950 border border-slate-750 rounded text-slate-100 placeholder-slate-600 focus:border-indigo-500 focus:outline-none"
-                        />
-                        <input
-                          type="tel"
-                          required
-                          placeholder="WhatsApp Phone (10 digits)"
-                          value={m.phone}
-                          onChange={(e) => handleMemberChange(idx, 'phone', e.target.value)}
-                          className="px-2.5 py-1.5 bg-slate-950 border border-slate-750 rounded text-slate-100 placeholder-slate-600 focus:border-indigo-500 focus:outline-none"
-                        />
-                        <input
-                          type="text"
-                          required
-                          placeholder="Roll / Register Number"
-                          value={m.registerNumber}
-                          onChange={(e) =>
-                            handleMemberChange(idx, 'registerNumber', e.target.value)
-                          }
-                          className="px-2.5 py-1.5 bg-slate-950 border border-slate-750 rounded text-slate-100 placeholder-slate-600 focus:border-indigo-500 focus:outline-none uppercase"
-                        />
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="flex items-center space-x-2 pt-1">
-                    {members.length < 3 && (
-                      <button
-                        type="button"
-                        onClick={handleAddMember}
-                        className="text-xs py-1.5 px-3 bg-slate-800 hover:bg-slate-750 text-indigo-300 rounded border border-slate-700 transition"
-                      >
-                        + Add 3rd Member
-                      </button>
-                    )}
-                    {members.length === 3 && (
-                      <button
-                        type="button"
-                        onClick={handleRemoveMember}
-                        className="text-xs py-1.5 px-3 bg-slate-800 hover:bg-slate-750 text-rose-300 rounded border border-slate-700 transition"
-                      >
-                        ✕ Remove 3rd Member
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Official WhatsApp Group Section */}
-                <div className="space-y-3 bg-slate-950/40 p-4 rounded-lg border border-slate-850">
-                  <div>
-                    <h4 className="text-sm font-semibold uppercase tracking-wider text-emerald-400">
-                      Official WhatsApp Group
-                    </h4>
-                    <p className="text-xs text-slate-300 mt-1">
-                      Join the official WhatsApp group to receive competition instructions and important announcements.
-                    </p>
-                  </div>
-
-                  <div>
-                    <a
-                      href={regEventInfo.whatsappGroupLink || '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center py-2 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-md shadow-sm transition"
-                    >
-                      JOIN WHATSAPP GROUP
-                    </a>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-800">
-                    <label className="flex items-center space-x-2.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        required
-                        checked={whatsappJoined}
-                        onChange={(e) => setWhatsappJoined(e.target.checked)}
-                        className="w-4 h-4 rounded text-emerald-600 bg-slate-950 border-slate-700 focus:ring-0 focus:ring-offset-0 cursor-pointer"
-                      />
-                      <span className="text-xs text-slate-200 font-medium">
-                        I have joined the official WhatsApp group
-                      </span>
-                    </label>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={regLoading || !whatsappJoined}
-                  className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium rounded-md transition"
-                >
-                  {regLoading ? 'Processing Registration...' : 'Submit Registration'}
-                </button>
-              </form>
-            )}
-          </div>
-        )}
-
-        {/* Backend API & DB Health Status (Module 1, 2, 3 verification preserved) */}
-        <div className="text-xs text-slate-400 bg-slate-950/60 p-3 rounded-lg border border-slate-800/60">
-          <p className="font-medium text-slate-300 mb-1">System Health:</p>
-          {healthStatus.loading && (
-            <span className="text-amber-400">Connecting to API...</span>
-          )}
-          {healthStatus.error && (
-            <span className="text-rose-400">Server Offline: {healthStatus.error}</span>
-          )}
-          {healthStatus.data && (
-            <span className="text-emerald-400 font-mono">
-              API Online • DB Connected ({healthStatus.data.database?.database || 'active'})
-            </span>
-          )}
-        </div>
-      </div>
-    </main>
+    <PublicLandingPage
+      healthStatus={healthStatus}
+      // Auth Props
+      session={session}
+      isCheckingAuth={isCheckingAuth}
+      email={email}
+      setEmail={setEmail}
+      otp={otp}
+      setOtp={setOtp}
+      loginStep={loginStep}
+      setLoginStep={setLoginStep}
+      loginLoading={loginLoading}
+      loginMessage={loginMessage}
+      setLoginMessage={setLoginMessage}
+      cooldown={cooldown}
+      handleRequestOtp={handleRequestOtp}
+      handleVerifyOtp={handleVerifyOtp}
+      handleLogout={handleLogout}
+      // Registration Props
+      regEventInfo={regEventInfo}
+      teamName={teamName}
+      setTeamName={setTeamName}
+      college={college}
+      setCollege={setCollege}
+      department={department}
+      setDepartment={setDepartment}
+      whatsappJoined={whatsappJoined}
+      setWhatsappJoined={setWhatsappJoined}
+      members={members}
+      handleMemberChange={handleMemberChange}
+      handleSetLead={handleSetLead}
+      handleAddMember={handleAddMember}
+      handleRemoveMember={handleRemoveMember}
+      handleRegisterSubmit={handleRegisterSubmit}
+      regLoading={regLoading}
+      regMessage={regMessage}
+      setRegMessage={setRegMessage}
+      registrationSuccess={registrationSuccess}
+      resetRegistrationForm={resetRegistrationForm}
+    />
   );
 }
 

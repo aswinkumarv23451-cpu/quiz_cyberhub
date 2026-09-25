@@ -1,3 +1,217 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #090A0D;
+    color: #F4EEDD;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Cinzel', 'Outfit', 'Inter', system-ui, sans-serif;
+    letter-spacing: 0.02em;
+  }
+}
+
+/* ── Custom Skull Cursor (Desktop / Pointer Devices Only) ───────────── */
+/*
+ * skull-cursor.jpeg is 1254×1254 px. Browsers cap cursor images at 32 or
+ * 128 px. We use image-set() with a 39.1875× descriptor so the browser
+ * renders it at 32 px (1254 ÷ 39.1875 ≈ 32). The raw-URL line acts as a
+ * last-resort fallback for browsers that do not support image-set(); those
+ * browsers will either scale it themselves or fall through to `auto`.
+ * JS (PublicLandingPage) additionally pre-renders a 32×32 canvas dataURL
+ * for maximum cross-browser fidelity.
+ */
+@media (hover: hover) and (pointer: fine) {
+  body {
+    cursor:
+      -webkit-image-set(url('/assets/skull-cursor.jpeg') 39.1875x) 16 2,
+              image-set(url('/assets/skull-cursor.jpeg') 39.1875x) 16 2,
+      url('/assets/skull-cursor.jpeg') 16 2,
+      auto;
+  }
+
+  /* Clickable elements keep the system pointer — feel natural to users */
+  a,
+  button,
+  [role="button"],
+  select,
+  summary,
+  label[for],
+  input[type="submit"],
+  input[type="button"],
+  input[type="checkbox"],
+  input[type="radio"],
+  .cursor-pointer {
+    cursor: pointer;
+  }
+}
+
+/* ── Instagram Button — Brand Gradient Treatment ────────────────────── */
+/*
+ * Used on both the Community section CTA and the Footer.
+ * Muted/elegant interpretation of Instagram's official gradient:
+ * purple → red → orange/gold, so it pairs with the site's dark palette.
+ */
+.instagram-btn {
+  background: linear-gradient(135deg, #6d3fa0 0%, #c0392b 50%, #c9872a 100%);
+  border: 1px solid rgba(160, 80, 40, 0.35);
+}
+
+.instagram-btn:hover {
+  background: linear-gradient(135deg, #7d4fba 0%, #d44032 50%, #d9973a 100%);
+  box-shadow: 0 4px 20px rgba(180, 60, 60, 0.35);
+}
+
+/* Instagram card hover border glow (Contact section) */
+.instagram-card-hover {
+  border-color: rgba(120, 60, 160, 0.18);
+}
+
+.instagram-card-hover:hover {
+  border-color: rgba(160, 60, 120, 0.55);
+  background: rgba(25, 10, 35, 0.92);
+  box-shadow: 0 4px 24px rgba(140, 40, 100, 0.25);
+}
+
+/* Instagram label gradient text */
+.instagram-label {
+  background: linear-gradient(to right, #c77dff, #ff6b9d, #ffb347);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Section Background Palette ─────────────────────────────────────── */
+/*
+ * Each section uses a distinct dark background to create visual rhythm.
+ * All warm dark tones; gold is an accent ONLY, never the main bg.
+ */
+
+/* HERO: #090A0D — cinematic near-black */
+/* (handled directly on the <section> element) */
+
+/* MISSION: Warm antique parchment-dark */
+.bg-parchment-dark {
+  background-color: #13110E;
+  background-image:
+    radial-gradient(ellipse at 30% 60%, rgba(212,175,55,0.04) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 20%, rgba(180,140,80,0.03) 0%, transparent 50%);
+}
+
+/* ABOUT: Deep charcoal + bronze shimmer */
+.bg-charcoal-deep {
+  background-color: #090A0D;
+  background-image:
+    radial-gradient(ellipse at 80% 30%, rgba(180,130,60,0.05) 0%, transparent 55%),
+    radial-gradient(ellipse at 10% 80%, rgba(212,175,55,0.03) 0%, transparent 45%);
+}
+
+/* EVENT FLOW + COMMUNITY: Dark wood — warmer brown-charcoal */
+.bg-wood-grain {
+  background-color: #0D0906;
+  background-image:
+    radial-gradient(ellipse at 25% 35%, rgba(140,100,50,0.07) 0%, transparent 55%),
+    radial-gradient(ellipse at 75% 75%, rgba(100,70,30,0.05) 0%, transparent 50%);
+}
+
+/* EVENTS: Deep muted navy (sparse, not overwhelming) */
+.bg-navy-950 {
+  background-color: #080C14;
+  background-image:
+    radial-gradient(ellipse at 60% 40%, rgba(40,70,130,0.08) 0%, transparent 60%),
+    radial-gradient(ellipse at 20% 80%, rgba(212,175,55,0.03) 0%, transparent 45%);
+}
+
+/* ── Map Grid & Cartographic Linework Textures ────────────────────── */
+.bg-cartography {
+  background-image: 
+    radial-gradient(circle at 50% 50%, rgba(212, 175, 55, 0.03) 0%, transparent 60%),
+    linear-gradient(to right, rgba(212, 175, 55, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(212, 175, 55, 0.025) 1px, transparent 1px);
+  background-size: 100% 100%, 52px 52px, 52px 52px;
+}
+
+/* ── Gold Leaf & Brass Textures ───────────────────────────────────── */
+.gold-text-gradient {
+  background: linear-gradient(135deg, #FFF6D6 0%, #D4AF37 50%, #947214 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.bronze-text-gradient {
+  background: linear-gradient(135deg, #F7EFD2 0%, #C7A87A 50%, #8C6836 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.border-gold-subtle {
+  border-color: rgba(212, 175, 55, 0.25);
+}
+
+.border-bronze-subtle {
+  border-color: rgba(168, 132, 84, 0.22);
+}
+
+/* ── Scroll-Reveal Animations ─────────────────────────────────────── */
+/*
+ * Items start invisible + shifted 24px down. IntersectionObserver in each
+ * component adds .reveal-visible which transitions to opacity:1, translateY:0.
+ */
+.reveal-item {
+  will-change: opacity, transform;
+}
+
+.reveal-visible {
+  opacity: 1 !important;
+  transform: translate(0, 0) !important;
+}
+
+/* ── Parallax Layers ──────────────────────────────────────────────── */
+/*
+ * Values written to --parallax-slow / --parallax-medium by PublicLandingPage
+ * via requestAnimationFrame. Prefer `transform` only — no layout-triggering
+ * properties. will-change tells the browser to promote these to their own
+ * compositor layer.
+ *
+ * Mobile: parallax intensity is halved by the JS engine (--parallax-* values
+ * are scaled by 0.4 on screens < 768px).
+ */
+.parallax-slow {
+  will-change: transform;
+  transform: translateY(var(--parallax-slow, 0px));
+}
+
+.parallax-medium {
+  will-change: transform;
+  transform: translateY(var(--parallax-medium, 0px));
+}
+
+/* ── Prefers Reduced Motion ───────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Immediately reveal all items — no animation */
+  .reveal-item {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Disable parallax */
+  .parallax-slow,
+  .parallax-medium {
+    transform: none !important;
+    will-change: auto;
+  }
+}
