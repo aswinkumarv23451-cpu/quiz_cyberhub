@@ -1,66 +1,50 @@
 /**
- * Module 4: Team Registration + Payment Proof Comprehensive Test Suite
+ * Round 1: Team Registration Test Suite
+ * Free Registration + Mandatory Official WhatsApp Group Confirmation
  *
  * Covers:
- * 1. Successful 2-member registration (1 lead, 1 member) with server-calculated ₹100 fee
- * 2. Successful 3-member registration (1 lead, 2 members) with server-calculated ₹150 fee
- * 3. Rejection when fewer than 2 members (< 2)
- * 4. Rejection when more than 3 members (> 3)
- * 5. Rejection when 0 TEAM_LEAD is designated
- * 6. Rejection when multiple TEAM_LEADs are designated
- * 7. Rejection when duplicate emails exist within the submitted team
- * 8. Rejection when duplicate register numbers exist within the submitted team
- * 9. Duplicate email protection across the event (safe anti-enumeration message)
- * 10. Duplicate team name protection within the event
- * 11. Event status check: registration rejected when event is LIVE or ENDED
- * 12. Multiple READY events fail safely
- * 13. Atomic rollback: transaction error leaves zero orphaned teams and cleans up disk file
- * 14. Existing user is reused without overwriting name or phone
- * 15. Server ignores client-provided fee/amount
- * 16. Server ignores client-provided registration_status (always PENDING)
- * 17. Client cannot select arbitrary event_id
- * 18. No internal UUID or Team ID exposed in API response
- * 19. Payment ID and payment proof required
- * 20. Real file validation: spoofed MIME type and invalid magic bytes rejected
- * 21. Payment proof extension/MIME mismatch rejected
- * 22. Path traversal attack rejected (original filename cannot control storage path)
- * 23. Concurrent duplicate registration caught by PostgreSQL unique constraints
+ * 1. Free registration succeeds without payment information
+ * 2. Payment ID is not required
+ * 3. Payment proof is not required (JSON payload succeeds)
+ * 4. WhatsApp confirmation is required (omitted confirmation rejected with 400)
+ * 5. whatsapp_group_joined=false is rejected with 400 (not described as payment rejection)
+ * 6. whatsapp_group_joined=true succeeds with 201
+ * 7. Official WhatsApp link is sourced from server configuration (GET /api/registration/event)
+ * 8. Successful 3-member free registration (1 lead, 2 members)
+ * 9. Rejection when fewer than 2 members submitted (< 2)
+ * 10. Rejection when more than 3 members submitted (> 3)
+ * 11. Rejection when 0 TEAM_LEAD designated
+ * 12. Rejection when multiple TEAM_LEADs designated
+ * 13. Duplicate emails within the same team rejected
+ * 14. Duplicate register numbers within the same team rejected
+ * 15. Member already in another team rejected with safe anti-enumeration error
+ * 16. Duplicate team name within event rejected
+ * 17. Registration rejected when event is LIVE or ENDED
+ * 18. Multiple READY events fails safely without arbitrary selection
+ * 19. Atomic rollback: DB failure leaves zero orphaned records
+ * 20. Existing user is reused without overwriting name or phone
+ * 21. Client cannot self-approve; registration_status is always PENDING
+ * 22. GET /api/registration/event returns safe event metadata without internal IDs
+ * 23. Concurrent duplicate team registration handled safely
  */
 
 import http from 'http';
-import fs from 'fs';
-import path from 'path';
 import { getClient, query, closePool } from '../config/database.js';
+import { config } from '../config/env.js';
 import app from '../app.js';
 import { registrationRateLimiter } from '../middleware/rateLimit.middleware.js';
-import { paymentProofStorage } from '../services/storage/paymentProofStorage.js';
 
 let server;
 let baseUrl;
-
-// Sample binary buffers with authentic magic bytes
-const VALID_PNG_BUFFER = Buffer.concat([
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  Buffer.from('IHDR\0\0\0\x01\0\0\0\x01\x08\x06\0\0\0\x1f\x15c4\0\0\0\nIDATx\x9cc`\0\0\0\x02\0\x01HAF*\0\0\0\0IEND\xaeB`\x82'),
-]);
-
-const VALID_JPEG_BUFFER = Buffer.concat([
-  Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]),
-  Buffer.alloc(100, 0xaa),
-  Buffer.from([0xff, 0xd9]),
-]);
-
-const FAKE_PNG_BUFFER = Buffer.from('NOT_A_REAL_PNG_FILE_CONTENT_JUST_TEXT');
-
 let testEventId;
 
 const setupEvent = async (status = 'READY') => {
-  // Clean up existing events to ensure exactly one READY event for the test
+  // Clean up existing events to ensure exactly one event for the test
   await query('DELETE FROM event;');
 
   const res = await query(
     `INSERT INTO event (name, description, status)
-     VALUES ('Module 4 Registration Test Event', 'Event for registration suite', $1)
+     VALUES ('Round 1 Free Registration Test Event', 'Event for free registration suite', $1)
      RETURNING id;`,
     [status]
   );
@@ -68,8 +52,30 @@ const setupEvent = async (status = 'READY') => {
   return testEventId;
 };
 
-// Multipart form builder helper for native fetch
-const buildMultipartBody = (fields, file) => {
+// Helper to post registration as JSON or multipart
+const postRegistration = async (fields, file = null) => {
+  if (!file) {
+    const bodyObj = { ...fields };
+    if (typeof bodyObj.members === 'string') {
+      try {
+        bodyObj.members = JSON.parse(bodyObj.members);
+      } catch (e) {}
+    }
+    const res = await fetch(`${baseUrl}/api/registration`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bodyObj),
+    });
+
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (e) {}
+
+    return { status: res.status, data };
+  }
+
+  // Multipart form builder helper for backward compatibility testing
   const boundary = `----WebKitFormBoundary${Date.now().toString(16)}`;
   const buffers = [];
 
@@ -95,20 +101,12 @@ const buildMultipartBody = (fields, file) => {
 
   buffers.push(Buffer.from(`--${boundary}--\r\n`));
 
-  return {
+  const res = await fetch(`${baseUrl}/api/registration`, {
+    method: 'POST',
     headers: {
       'Content-Type': `multipart/form-data; boundary=${boundary}`,
     },
     body: Buffer.concat(buffers),
-  };
-};
-
-const postRegistration = async (fields, file) => {
-  const { headers, body } = buildMultipartBody(fields, file);
-  const res = await fetch(`${baseUrl}/api/registration`, {
-    method: 'POST',
-    headers,
-    body,
   });
 
   let data = null;
@@ -143,7 +141,7 @@ const assert = (condition, message) => {
 };
 
 const runTests = async () => {
-  console.log('\n=== Module 4: Team Registration & Payment Proof Test Suite ===\n');
+  console.log('\n=== Round 1: Free Registration & Official WhatsApp Confirmation Test Suite ===\n');
 
   server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, resolve));
@@ -153,367 +151,404 @@ const runTests = async () => {
     await setupEvent('READY');
 
     // --------------------------------------------------------------------------
-    // Test 1: Successful 2-member registration & ₹100 fee calculation
+    // Test 1: Free registration succeeds without payment information
     // --------------------------------------------------------------------------
-    await test('1. Successful 2-member registration (1 lead, 1 member) with ₹100 fee', async () => {
-      const res = await postRegistration(
-        {
-          teamName: 'Code Titans',
-          college: 'PSG College of Technology',
-          department: 'Computer Science',
-          paymentId: 'TXN10001',
-          members: JSON.stringify([
-            {
-              name: 'Aswin Kumar',
-              email: 'aswin@psgtech.edu',
-              phone: '9876543210',
-              registerNumber: '21CS001',
-              role: 'TEAM_LEAD',
-            },
-            {
-              name: 'Karthik Raja',
-              email: 'karthik@psgtech.edu',
-              phone: '9876543211',
-              registerNumber: '21CS002',
-              role: 'MEMBER',
-            },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'receipt.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
+    await test('1. Free registration succeeds without payment information', async () => {
+      const res = await postRegistration({
+        teamName: 'Code Titans',
+        college: 'PSG College of Technology',
+        department: 'Computer Science',
+        whatsapp_group_joined: true,
+        // NO paymentId, NO paymentProof
+        members: [
+          {
+            name: 'Aswin Kumar',
+            email: 'aswin@psgtech.edu',
+            phone: '9876543210',
+            registerNumber: '21CS001',
+            role: 'TEAM_LEAD',
+          },
+          {
+            name: 'Karthik Raja',
+            email: 'karthik@psgtech.edu',
+            phone: '9876543211',
+            registerNumber: '21CS002',
+            role: 'MEMBER',
+          },
+        ],
+      });
 
       assert(res.status === 201, `Expected 201, got ${res.status}: ${JSON.stringify(res.data)}`);
       assert(res.data.registrationStatus === 'PENDING', 'Status must be PENDING');
       assert(res.data.memberCount === 2, 'Member count must be 2');
-      assert(res.data.fee === 100, 'Fee must be server-calculated as 100');
       assert(res.data.teamName === 'Code Titans', 'Team name matches');
+      assert(res.data.whatsappGroupJoined === true, 'WhatsApp confirmation confirmed');
+      assert(res.data.fee === undefined, 'Must NOT return fee in response');
 
       // Verify no internal UUIDs exposed
       assert(!res.data.teamId && !res.data.id && !res.data.eventId, 'Must not leak database UUIDs');
+
+      // Verify database record has whatsapp_group_joined=true and payment columns unused (null)
+      const teamInDb = await query(
+        'SELECT payment_id, payment_proof_path, whatsapp_group_joined FROM teams WHERE name = $1;',
+        ['Code Titans']
+      );
+      assert(teamInDb.rows.length === 1, 'Team must be stored in database');
+      assert(teamInDb.rows[0].whatsapp_group_joined === true, 'whatsapp_group_joined must be true in DB');
+      assert(teamInDb.rows[0].payment_id === null, 'payment_id must remain null/unused');
+      assert(teamInDb.rows[0].payment_proof_path === null, 'payment_proof_path must remain null/unused');
     });
 
     // --------------------------------------------------------------------------
-    // Test 2: Successful 3-member registration & ₹150 fee calculation
+    // Test 2: Payment ID is not required
     // --------------------------------------------------------------------------
-    await test('2. Successful 3-member registration (1 lead, 2 members) with ₹150 fee', async () => {
-      const res = await postRegistration(
-        {
-          teamName: 'Binary Beasts',
-          college: 'Coimbatore Institute of Technology',
-          department: 'Information Technology',
-          paymentId: 'TXN15002',
-          members: JSON.stringify([
-            {
-              name: 'Priya Dharshini',
-              email: 'priya@cit.edu.in',
-              phone: '9876543220',
-              registerNumber: '21IT001',
-              role: 'TEAM_LEAD',
-            },
-            {
-              name: 'Suresh Kumar',
-              email: 'suresh@cit.edu.in',
-              phone: '+919876543221',
-              registerNumber: '21IT002',
-              role: 'MEMBER',
-            },
-            {
-              name: 'Ananya Sharma',
-              email: 'ananya@cit.edu.in',
-              phone: '09876543222',
-              registerNumber: '21IT003',
-              role: 'MEMBER',
-            },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.jpg',
-          mimetype: 'image/jpeg',
-          buffer: VALID_JPEG_BUFFER,
-        }
-      );
+    await test('2. Payment ID is not required', async () => {
+      const res = await postRegistration({
+        teamName: 'Alpha Squad',
+        college: 'PSG Tech',
+        department: 'IT',
+        whatsapp_group_joined: true,
+        // paymentId explicitly omitted
+        members: [
+          { name: 'Lead User', email: 'lead_nopayid@test.com', phone: '9876543212', registerNumber: 'AS01', role: 'TEAM_LEAD' },
+          { name: 'Member User', email: 'member_nopayid@test.com', phone: '9876543213', registerNumber: 'AS02', role: 'MEMBER' },
+        ],
+      });
+
+      assert(res.status === 201, `Expected 201, got ${res.status}`);
+      assert(res.data.registrationStatus === 'PENDING');
+    });
+
+    // --------------------------------------------------------------------------
+    // Test 3: Payment proof is not required (JSON payload succeeds without multipart/file)
+    // --------------------------------------------------------------------------
+    await test('3. Payment proof is not required (pure JSON without file)', async () => {
+      const res = await postRegistration({
+        teamName: 'Beta Squad',
+        college: 'CIT',
+        department: 'ECE',
+        whatsapp_group_joined: true,
+        // No file uploaded
+        members: [
+          { name: 'Beta Lead', email: 'beta_lead@cit.edu', phone: '9876543214', registerNumber: 'BS01', role: 'TEAM_LEAD' },
+          { name: 'Beta Member', email: 'beta_member@cit.edu', phone: '9876543215', registerNumber: 'BS02', role: 'MEMBER' },
+        ],
+      });
+
+      assert(res.status === 201, `Expected 201, got ${res.status}`);
+      assert(res.data.teamName === 'Beta Squad');
+    });
+
+    // --------------------------------------------------------------------------
+    // Test 4: WhatsApp confirmation is required (missing confirmation rejected)
+    // --------------------------------------------------------------------------
+    await test('4. WhatsApp confirmation is required (omitted confirmation rejected with 400)', async () => {
+      const res = await postRegistration({
+        teamName: 'Unconfirmed Team',
+        college: 'GCT',
+        department: 'EEE',
+        // whatsapp_group_joined NOT provided
+        members: [
+          { name: 'UC Lead', email: 'uc_lead@gct.ac.in', phone: '9876543216', registerNumber: 'UC01', role: 'TEAM_LEAD' },
+          { name: 'UC Member', email: 'uc_member@gct.ac.in', phone: '9876543217', registerNumber: 'UC02', role: 'MEMBER' },
+        ],
+      });
+
+      assert(res.status === 400, `Expected 400 Bad Request, got ${res.status}`);
+      assert(res.data.message.toLowerCase().includes('whatsapp'), 'Error message must mention WhatsApp');
+      assert(!res.data.message.toLowerCase().includes('payment'), 'Must NOT describe error as payment rejection');
+    });
+
+    // --------------------------------------------------------------------------
+    // Test 5: whatsapp_group_joined=false is rejected with normal validation error
+    // --------------------------------------------------------------------------
+    await test('5. whatsapp_group_joined=false is rejected with 400 validation error', async () => {
+      const res = await postRegistration({
+        teamName: 'Refusal Team',
+        college: 'GCT',
+        department: 'Mech',
+        whatsapp_group_joined: false,
+        members: [
+          { name: 'Ref Lead', email: 'ref_lead@gct.ac.in', phone: '9876543218', registerNumber: 'RF01', role: 'TEAM_LEAD' },
+          { name: 'Ref Member', email: 'ref_member@gct.ac.in', phone: '9876543219', registerNumber: 'RF02', role: 'MEMBER' },
+        ],
+      });
+
+      assert(res.status === 400, `Expected 400 Bad Request, got ${res.status}`);
+      assert(res.data.message.toLowerCase().includes('whatsapp'), 'Error must mention WhatsApp group confirmation');
+      assert(!res.data.message.toLowerCase().includes('payment'), 'Must NOT describe error as payment rejection');
+    });
+
+    // --------------------------------------------------------------------------
+    // Test 6: whatsapp_group_joined=true succeeds
+    // --------------------------------------------------------------------------
+    await test('6. whatsapp_group_joined=true succeeds with 201', async () => {
+      const res = await postRegistration({
+        teamName: 'Confirmed Team',
+        college: 'PSG Tech',
+        department: 'CSE',
+        whatsapp_group_joined: true,
+        members: [
+          { name: 'Conf Lead', email: 'conf_lead@psg.edu', phone: '9876543221', registerNumber: 'CF01', role: 'TEAM_LEAD' },
+          { name: 'Conf Member', email: 'conf_member@psg.edu', phone: '9876543222', registerNumber: 'CF02', role: 'MEMBER' },
+        ],
+      });
+
+      assert(res.status === 201, `Expected 201, got ${res.status}`);
+      assert(res.data.whatsappGroupJoined === true, 'Response confirms whatsappGroupJoined');
+    });
+
+    // --------------------------------------------------------------------------
+    // Test 7: Official WhatsApp link is sourced from server configuration
+    // --------------------------------------------------------------------------
+    await test('7. Official WhatsApp link is sourced from server configuration (GET /api/registration/event)', async () => {
+      const res = await fetch(`${baseUrl}/api/registration/event`);
+      const data = await res.json();
+
+      assert(res.status === 200, `Expected 200, got ${res.status}`);
+      assert(data.success === true, 'Expected success true');
+      assert(data.registrationOpen === true, 'Expected registrationOpen true');
+      assert(data.whatsappGroupLink === config.whatsappGroupLink, 'Link must match server configuration');
+      assert(typeof data.whatsappGroupLink === 'string' && data.whatsappGroupLink.startsWith('https://chat.whatsapp.com/'), 'Must be a valid WhatsApp link');
+      assert(data.feePerMember === undefined, 'Must NOT expose feePerMember');
+      assert(!data.event.id && !data.event.event_id, 'Must NOT expose internal database IDs');
+    });
+
+    // --------------------------------------------------------------------------
+    // Test 8: Successful 3-member free registration (1 lead, 2 members)
+    // --------------------------------------------------------------------------
+    await test('8. Successful 3-member free registration (1 lead, 2 members)', async () => {
+      const res = await postRegistration({
+        teamName: 'Binary Beasts',
+        college: 'Coimbatore Institute of Technology',
+        department: 'Information Technology',
+        whatsapp_group_joined: true,
+        members: [
+          {
+            name: 'Priya Dharshini',
+            email: 'priya@cit.edu.in',
+            phone: '9876543220',
+            registerNumber: '21IT001',
+            role: 'TEAM_LEAD',
+          },
+          {
+            name: 'Suresh Kumar',
+            email: 'suresh@cit.edu.in',
+            phone: '+919876543223',
+            registerNumber: '21IT002',
+            role: 'MEMBER',
+          },
+          {
+            name: 'Ananya Sharma',
+            email: 'ananya@cit.edu.in',
+            phone: '09876543224',
+            registerNumber: '21IT003',
+            role: 'MEMBER',
+          },
+        ],
+      });
 
       assert(res.status === 201, `Expected 201, got ${res.status}`);
       assert(res.data.memberCount === 3, 'Member count must be 3');
-      assert(res.data.fee === 150, 'Fee must be server-calculated as 150');
+      assert(res.data.registrationStatus === 'PENDING');
     });
 
     // --------------------------------------------------------------------------
-    // Test 3: Rejection when fewer than 2 members (< 2)
+    // Test 9: Rejection when fewer than 2 members submitted (< 2)
     // --------------------------------------------------------------------------
-    await test('3. Rejection when fewer than 2 members submitted', async () => {
-      const res = await postRegistration(
-        {
-          teamName: 'Solo Team',
-          college: 'GCT',
-          department: 'ECE',
-          paymentId: 'TXN_SOLO',
-          members: JSON.stringify([
-            {
-              name: 'Solo Lead',
-              email: 'solo@gct.ac.in',
-              phone: '9876543230',
-              registerNumber: '21EC001',
-              role: 'TEAM_LEAD',
-            },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
+    await test('9. Rejection when fewer than 2 members submitted', async () => {
+      const res = await postRegistration({
+        teamName: 'Solo Team',
+        college: 'GCT',
+        department: 'ECE',
+        whatsapp_group_joined: true,
+        members: [
+          {
+            name: 'Solo Lead',
+            email: 'solo@gct.ac.in',
+            phone: '9876543230',
+            registerNumber: '21EC001',
+            role: 'TEAM_LEAD',
+          },
+        ],
+      });
 
       assert(res.status === 400, `Expected 400, got ${res.status}`);
       assert(res.data.message.includes('2 or 3 members'), 'Expected size validation message');
     });
 
     // --------------------------------------------------------------------------
-    // Test 4: Rejection when more than 3 members (> 3)
+    // Test 10: Rejection when more than 3 members submitted (> 3)
     // --------------------------------------------------------------------------
-    await test('4. Rejection when more than 3 members submitted', async () => {
-      const res = await postRegistration(
-        {
-          teamName: 'Large Team',
-          college: 'GCT',
-          department: 'ECE',
-          paymentId: 'TXN_LARGE',
-          members: JSON.stringify([
-            { name: 'M1', email: 'm1@gct.ac.in', phone: '9876543241', registerNumber: '21EC01', role: 'TEAM_LEAD' },
-            { name: 'M2', email: 'm2@gct.ac.in', phone: '9876543242', registerNumber: '21EC02', role: 'MEMBER' },
-            { name: 'M3', email: 'm3@gct.ac.in', phone: '9876543243', registerNumber: '21EC03', role: 'MEMBER' },
-            { name: 'M4', email: 'm4@gct.ac.in', phone: '9876543244', registerNumber: '21EC04', role: 'MEMBER' },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
+    await test('10. Rejection when more than 3 members submitted', async () => {
+      const res = await postRegistration({
+        teamName: 'Large Team',
+        college: 'GCT',
+        department: 'ECE',
+        whatsapp_group_joined: true,
+        members: [
+          { name: 'M1', email: 'm1@gct.ac.in', phone: '9876543241', registerNumber: '21EC01', role: 'TEAM_LEAD' },
+          { name: 'M2', email: 'm2@gct.ac.in', phone: '9876543242', registerNumber: '21EC02', role: 'MEMBER' },
+          { name: 'M3', email: 'm3@gct.ac.in', phone: '9876543243', registerNumber: '21EC03', role: 'MEMBER' },
+          { name: 'M4', email: 'm4@gct.ac.in', phone: '9876543244', registerNumber: '21EC04', role: 'MEMBER' },
+        ],
+      });
 
       assert(res.status === 400, `Expected 400, got ${res.status}`);
       assert(res.data.message.includes('2 or 3 members'), 'Expected size validation message');
     });
 
     // --------------------------------------------------------------------------
-    // Test 5: Rejection when 0 TEAM_LEAD designated
+    // Test 11: Rejection when 0 TEAM_LEAD designated
     // --------------------------------------------------------------------------
-    await test('5. Rejection when 0 TEAM_LEAD designated', async () => {
-      const res = await postRegistration(
-        {
-          teamName: 'Leaderless Team',
-          college: 'College',
-          department: 'CSE',
-          paymentId: 'TXN_NO_LEAD',
-          members: JSON.stringify([
-            { name: 'M1', email: 'nolead1@college.edu', phone: '9876543251', registerNumber: 'R1', role: 'MEMBER' },
-            { name: 'M2', email: 'nolead2@college.edu', phone: '9876543252', registerNumber: 'R2', role: 'MEMBER' },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
+    await test('11. Rejection when 0 TEAM_LEAD designated', async () => {
+      const res = await postRegistration({
+        teamName: 'Leaderless Team',
+        college: 'College',
+        department: 'CSE',
+        whatsapp_group_joined: true,
+        members: [
+          { name: 'M1', email: 'nolead1@college.edu', phone: '9876543251', registerNumber: 'R1', role: 'MEMBER' },
+          { name: 'M2', email: 'nolead2@college.edu', phone: '9876543252', registerNumber: 'R2', role: 'MEMBER' },
+        ],
+      });
 
       assert(res.status === 400, `Expected 400, got ${res.status}`);
       assert(res.data.message.includes('exactly one Team Lead'), 'Expected lead error message');
     });
 
     // --------------------------------------------------------------------------
-    // Test 6: Rejection when multiple TEAM_LEADs designated
+    // Test 12: Rejection when multiple TEAM_LEADs designated
     // --------------------------------------------------------------------------
-    await test('6. Rejection when multiple TEAM_LEADs designated', async () => {
-      const res = await postRegistration(
-        {
-          teamName: 'Two Leads Team',
-          college: 'College',
-          department: 'CSE',
-          paymentId: 'TXN_TWO_LEADS',
-          members: JSON.stringify([
-            { name: 'L1', email: 'twolead1@college.edu', phone: '9876543261', registerNumber: 'TL1', role: 'TEAM_LEAD' },
-            { name: 'L2', email: 'twolead2@college.edu', phone: '9876543262', registerNumber: 'TL2', role: 'TEAM_LEAD' },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
+    await test('12. Rejection when multiple TEAM_LEADs designated', async () => {
+      const res = await postRegistration({
+        teamName: 'Two Leads Team',
+        college: 'College',
+        department: 'CSE',
+        whatsapp_group_joined: true,
+        members: [
+          { name: 'L1', email: 'twolead1@college.edu', phone: '9876543261', registerNumber: 'TL1', role: 'TEAM_LEAD' },
+          { name: 'L2', email: 'twolead2@college.edu', phone: '9876543262', registerNumber: 'TL2', role: 'TEAM_LEAD' },
+        ],
+      });
 
       assert(res.status === 400, `Expected 400, got ${res.status}`);
       assert(res.data.message.includes('exactly one Team Lead'), 'Expected lead error message');
     });
 
     // --------------------------------------------------------------------------
-    // Test 7: Duplicate emails within submitted team rejected
+    // Test 13: Duplicate emails within submitted team rejected
     // --------------------------------------------------------------------------
-    await test('7. Duplicate emails within the same team rejected', async () => {
-      const res = await postRegistration(
-        {
-          teamName: 'Clone Team',
-          college: 'College',
-          department: 'IT',
-          paymentId: 'TXN_CLONE',
-          members: JSON.stringify([
-            { name: 'Clone 1', email: 'same@college.edu', phone: '9876543271', registerNumber: 'CL1', role: 'TEAM_LEAD' },
-            { name: 'Clone 2', email: 'same@college.edu', phone: '9876543272', registerNumber: 'CL2', role: 'MEMBER' },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
+    await test('13. Duplicate emails within the same team rejected', async () => {
+      const res = await postRegistration({
+        teamName: 'Clone Team',
+        college: 'College',
+        department: 'IT',
+        whatsapp_group_joined: true,
+        members: [
+          { name: 'Clone 1', email: 'same@college.edu', phone: '9876543271', registerNumber: 'CL1', role: 'TEAM_LEAD' },
+          { name: 'Clone 2', email: 'same@college.edu', phone: '9876543272', registerNumber: 'CL2', role: 'MEMBER' },
+        ],
+      });
 
       assert(res.status === 400, `Expected 400, got ${res.status}`);
       assert(res.data.message.includes('unique'), 'Expected email unique error');
     });
 
     // --------------------------------------------------------------------------
-    // Test 8: Duplicate register numbers within submitted team rejected
+    // Test 14: Duplicate register numbers within submitted team rejected
     // --------------------------------------------------------------------------
-    await test('8. Duplicate register numbers within the same team rejected', async () => {
-      const res = await postRegistration(
-        {
-          teamName: 'Reg Dup Team',
-          college: 'College',
-          department: 'IT',
-          paymentId: 'TXN_REG_DUP',
-          members: JSON.stringify([
-            { name: 'Person A', email: 'personA@college.edu', phone: '9876543281', registerNumber: 'SAME_REG', role: 'TEAM_LEAD' },
-            { name: 'Person B', email: 'personB@college.edu', phone: '9876543282', registerNumber: 'SAME_REG', role: 'MEMBER' },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
+    await test('14. Duplicate register numbers within the same team rejected', async () => {
+      const res = await postRegistration({
+        teamName: 'Reg Dup Team',
+        college: 'College',
+        department: 'IT',
+        whatsapp_group_joined: true,
+        members: [
+          { name: 'Person A', email: 'personA@college.edu', phone: '9876543281', registerNumber: 'SAME_REG', role: 'TEAM_LEAD' },
+          { name: 'Person B', email: 'personB@college.edu', phone: '9876543282', registerNumber: 'SAME_REG', role: 'MEMBER' },
+        ],
+      });
 
       assert(res.status === 400, `Expected 400, got ${res.status}`);
       assert(res.data.message.includes('unique'), 'Expected reg number unique error');
     });
 
     // --------------------------------------------------------------------------
-    // Test 9: Duplicate email across event rejected with safe anti-enumeration message
+    // Test 15: Duplicate email across event rejected with safe anti-enumeration message
     // --------------------------------------------------------------------------
-    await test('9. Member already in another team rejected with safe anti-enumeration error', async () => {
+    await test('15. Member already in another team rejected with safe anti-enumeration error', async () => {
       // 'aswin@psgtech.edu' is already registered in 'Code Titans' from Test 1
-      const res = await postRegistration(
-        {
-          teamName: 'Poachers',
-          college: 'Another College',
-          department: 'CSE',
-          paymentId: 'TXN_DUP_CROSS',
-          members: JSON.stringify([
-            {
-              name: 'Different Name',
-              email: 'aswin@psgtech.edu', // ALREADY REGISTERED IN THIS EVENT
-              phone: '9876543291',
-              registerNumber: 'POACH01',
-              role: 'TEAM_LEAD',
-            },
-            {
-              name: 'New Person',
-              email: 'newperson@another.edu',
-              phone: '9876543292',
-              registerNumber: 'POACH02',
-              role: 'MEMBER',
-            },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
+      const res = await postRegistration({
+        teamName: 'Poachers',
+        college: 'Another College',
+        department: 'CSE',
+        whatsapp_group_joined: true,
+        members: [
+          {
+            name: 'Different Name',
+            email: 'aswin@psgtech.edu', // ALREADY REGISTERED IN THIS EVENT
+            phone: '9876543291',
+            registerNumber: 'POACH01',
+            role: 'TEAM_LEAD',
+          },
+          {
+            name: 'New Person',
+            email: 'newperson@another.edu',
+            phone: '9876543292',
+            registerNumber: 'POACH02',
+            role: 'MEMBER',
+          },
+        ],
+      });
 
       assert(res.status === 409, `Expected 409 Conflict, got ${res.status}`);
-      // MANDATORY CORRECTION 5: Anti-enumeration check
       assert(
         res.data.message === 'One or more members are already registered for this event.',
-        `Expected generic anti-enumeration message, got: ${res.data.message}`
+        'Must return safe anti-enumeration message'
       );
-      assert(!res.data.message.includes('aswin@psgtech.edu'), 'Must not leak the specific email');
     });
 
     // --------------------------------------------------------------------------
-    // Test 10: Duplicate team name within event rejected
+    // Test 16: Duplicate team name within event rejected
     // --------------------------------------------------------------------------
-    await test('10. Duplicate team name within event rejected', async () => {
-      // 'Code Titans' registered in Test 1
-      const res = await postRegistration(
-        {
-          teamName: 'Code Titans', // Case-insensitive collision
-          college: 'Different College',
-          department: 'MECH',
-          paymentId: 'TXN_TEAM_DUP',
-          members: JSON.stringify([
-            { name: 'X1', email: 'x1@mech.edu', phone: '9876543301', registerNumber: 'M01', role: 'TEAM_LEAD' },
-            { name: 'X2', email: 'x2@mech.edu', phone: '9876543302', registerNumber: 'M02', role: 'MEMBER' },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
+    await test('16. Duplicate team name within event rejected', async () => {
+      // 'Code Titans' already registered in Test 1
+      const res = await postRegistration({
+        teamName: 'Code Titans',
+        college: 'Different College',
+        department: 'IT',
+        whatsapp_group_joined: true,
+        members: [
+          { name: 'T1', email: 't1@college.edu', phone: '9876543301', registerNumber: 'T01', role: 'TEAM_LEAD' },
+          { name: 'T2', email: 't2@college.edu', phone: '9876543302', registerNumber: 'T02', role: 'MEMBER' },
+        ],
+      });
 
       assert(res.status === 409, `Expected 409 Conflict, got ${res.status}`);
       assert(
-        res.data.message.includes('Team name is already registered'),
-        'Expected team name collision error'
+        res.data.message.includes('already registered'),
+        'Expected team name duplicate error'
       );
     });
 
     // --------------------------------------------------------------------------
-    // Test 11: Event status check: registration rejected when event is LIVE or ENDED
+    // Test 17: Registration rejected when event is LIVE or ENDED
     // --------------------------------------------------------------------------
-    await test('11. Registration rejected when event is LIVE or ENDED', async () => {
-      // Set event to LIVE
+    await test('17. Registration rejected when event is LIVE or ENDED', async () => {
+      // Change event status to LIVE
       await query('UPDATE event SET status = $1 WHERE id = $2;', ['LIVE', testEventId]);
 
-      const res = await postRegistration(
-        {
-          teamName: 'Late Comers',
-          college: 'College',
-          department: 'CSE',
-          paymentId: 'TXN_LATE',
-          members: JSON.stringify([
-            { name: 'Late 1', email: 'late1@college.edu', phone: '9876543311', registerNumber: 'L01', role: 'TEAM_LEAD' },
-            { name: 'Late 2', email: 'late2@college.edu', phone: '9876543312', registerNumber: 'L02', role: 'MEMBER' },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
+      const res = await postRegistration({
+        teamName: 'Late Comers',
+        college: 'College',
+        department: 'CSE',
+        whatsapp_group_joined: true,
+        members: [
+          { name: 'Late 1', email: 'late1@college.edu', phone: '9876543311', registerNumber: 'L01', role: 'TEAM_LEAD' },
+          { name: 'Late 2', email: 'late2@college.edu', phone: '9876543312', registerNumber: 'L02', role: 'MEMBER' },
+        ],
+      });
 
       assert(res.status === 400, `Expected 400, got ${res.status}`);
       assert(res.data.message.includes('closed'), 'Expected registration closed message');
@@ -523,9 +558,9 @@ const runTests = async () => {
     });
 
     // --------------------------------------------------------------------------
-    // Test 12: Multiple READY events fails safely (Mandatory Correction 8)
+    // Test 18: Multiple READY events fails safely
     // --------------------------------------------------------------------------
-    await test('12. Multiple READY events fails safely without arbitrary selection', async () => {
+    await test('18. Multiple READY events fails safely without arbitrary selection', async () => {
       // Insert second READY event
       const secondEventRes = await query(
         `INSERT INTO event (name, description, status)
@@ -534,24 +569,16 @@ const runTests = async () => {
       );
       const secondEventId = secondEventRes.rows[0].id;
 
-      const res = await postRegistration(
-        {
-          teamName: 'Ambiguity Test Team',
-          college: 'College',
-          department: 'CSE',
-          paymentId: 'TXN_AMBIGUOUS',
-          members: JSON.stringify([
-            { name: 'Amb1', email: 'amb1@college.edu', phone: '9876543321', registerNumber: 'A01', role: 'TEAM_LEAD' },
-            { name: 'Amb2', email: 'amb2@college.edu', phone: '9876543322', registerNumber: 'A02', role: 'MEMBER' },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
+      const res = await postRegistration({
+        teamName: 'Ambiguity Test Team',
+        college: 'College',
+        department: 'CSE',
+        whatsapp_group_joined: true,
+        members: [
+          { name: 'Amb1', email: 'amb1@college.edu', phone: '9876543321', registerNumber: 'A01', role: 'TEAM_LEAD' },
+          { name: 'Amb2', email: 'amb2@college.edu', phone: '9876543322', registerNumber: 'A02', role: 'MEMBER' },
+        ],
+      });
 
       assert(res.status === 500, `Expected 500 for ambiguous events, got ${res.status}`);
       assert(
@@ -564,53 +591,32 @@ const runTests = async () => {
     });
 
     // --------------------------------------------------------------------------
-    // Test 13: Atomic rollback & file cleanup on database failure
+    // Test 19: Atomic rollback on database failure leaves zero orphaned records
     // --------------------------------------------------------------------------
-    await test('13. Atomic rollback: DB failure leaves zero records and cleans up disk file', async () => {
-      // We will trigger a failure by using an invalid event_id internally or conflicting data
-      // Let's create a team that fails at member insertion stage (e.g. duplicate register number in team_members)
-      // First, let's verify uploads folder count before attempt
-      const uploadsDir = path.resolve('uploads/payment-proofs');
-      const filesBefore = fs.existsSync(uploadsDir) ? fs.readdirSync(uploadsDir) : [];
-
+    await test('19. Atomic rollback: DB failure leaves zero orphaned records', async () => {
       // Attempt registration where team name is duplicate to force DB transaction abort
-      const res = await postRegistration(
-        {
-          teamName: 'Code Titans', // Will trigger rollback
-          college: 'PSG',
-          department: 'CSE',
-          paymentId: 'TXN_ROLLBACK',
-          members: JSON.stringify([
-            { name: 'Rollback 1', email: 'rollback1@psg.edu', phone: '9876543331', registerNumber: 'RB01', role: 'TEAM_LEAD' },
-            { name: 'Rollback 2', email: 'rollback2@psg.edu', phone: '9876543332', registerNumber: 'RB02', role: 'MEMBER' },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
+      const res = await postRegistration({
+        teamName: 'Code Titans', // Will trigger duplicate 409
+        college: 'PSG',
+        department: 'CSE',
+        whatsapp_group_joined: true,
+        members: [
+          { name: 'Rollback 1', email: 'rollback1@psg.edu', phone: '9876543331', registerNumber: 'RB01', role: 'TEAM_LEAD' },
+          { name: 'Rollback 2', email: 'rollback2@psg.edu', phone: '9876543332', registerNumber: 'RB02', role: 'MEMBER' },
+        ],
+      });
 
       assert(res.status === 409, `Expected 409, got ${res.status}`);
 
-      // Check uploads directory: no new file should remain!
-      const filesAfter = fs.existsSync(uploadsDir) ? fs.readdirSync(uploadsDir) : [];
-      assert(
-        filesAfter.length === filesBefore.length,
-        'File MUST be deleted on transaction failure'
-      );
-
-      // Verify users were not inserted
+      // Verify users were not inserted into users table
       const checkUser = await query('SELECT id FROM users WHERE email = $1;', ['rollback1@psg.edu']);
       assert(checkUser.rows.length === 0, 'Orphaned user must not exist after rollback');
     });
 
     // --------------------------------------------------------------------------
-    // Test 14: Existing user is reused without overwriting name or phone (Mandatory Correction 1)
+    // Test 20: Existing user is reused without overwriting name or phone
     // --------------------------------------------------------------------------
-    await test('14. Existing user is reused without overwriting name or phone', async () => {
+    await test('20. Existing user is reused without overwriting name or phone', async () => {
       await query('DELETE FROM users WHERE email IN ($1, $2);', [
         'existinguser@reuse.edu',
         'partner@reuse.edu',
@@ -624,258 +630,92 @@ const runTests = async () => {
       const originalUserId = origRes.rows[0].id;
 
       // Register new team featuring this existing user with DIFFERENT name and phone submitted
-      const res = await postRegistration(
-        {
-          teamName: 'Reusers Team',
-          college: 'PSG',
-          department: 'CSE',
-          paymentId: 'TXN_REUSE',
-          members: JSON.stringify([
-            {
-              name: 'Attempted Overwrite Name', // Should be ignored
-              email: 'existinguser@reuse.edu',
-              phone: '9876543340', // Should be ignored
-              registerNumber: 'RU01',
-              role: 'TEAM_LEAD',
-            },
-            {
-              name: 'Partner User',
-              email: 'partner@reuse.edu',
-              phone: '9876543341',
-              registerNumber: 'RU02',
-              role: 'MEMBER',
-            },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
+      const res = await postRegistration({
+        teamName: 'Reusers Team',
+        college: 'PSG',
+        department: 'CSE',
+        whatsapp_group_joined: true,
+        members: [
+          {
+            name: 'Attempted Overwrite Name', // Should be ignored
+            email: 'existinguser@reuse.edu',
+            phone: '9876543340', // Should be ignored
+            registerNumber: 'RU01',
+            role: 'TEAM_LEAD',
+          },
+          {
+            name: 'Partner User',
+            email: 'partner@reuse.edu',
+            phone: '9876543341',
+            registerNumber: 'RU02',
+            role: 'MEMBER',
+          },
+        ],
+      });
 
       assert(res.status === 201, `Expected 201, got ${res.status}`);
 
-      // Verify DB record: ID is identical, name and phone were NOT overwritten!
-      const userCheck = await query('SELECT id, name, phone FROM users WHERE id = $1;', [originalUserId]);
-      assert(userCheck.rows.length === 1, 'User must exist');
-      assert(userCheck.rows[0].name === 'Original Name', 'Name MUST NOT be overwritten');
-      assert(userCheck.rows[0].phone === '+919999999999', 'Phone MUST NOT be overwritten');
+      // Verify user in DB still has Original Name and Phone
+      const userCheck = await query('SELECT name, phone FROM users WHERE id = $1;', [originalUserId]);
+      assert(userCheck.rows[0].name === 'Original Name', 'Existing user name must not be overwritten');
+      assert(userCheck.rows[0].phone === '+919999999999', 'Existing user phone must not be overwritten');
     });
 
     // --------------------------------------------------------------------------
-    // Test 15: Server ignores client-provided fee/amount (Mandatory Correction 2)
+    // Test 21: Client cannot self-approve; registration_status is always PENDING
     // --------------------------------------------------------------------------
-    await test('15. Server ignores client-provided fee/amount and calculates authoritatively', async () => {
-      const res = await postRegistration(
-        {
-          teamName: 'Fee Tamper Team',
-          college: 'College',
-          department: 'CSE',
-          paymentId: 'TXN_TAMPER',
-          fee: 1, // Tampered fee attempt
-          amount: 5, // Tampered amount attempt
-          members: JSON.stringify([
-            { name: 'T1', email: 'tamper1@col.edu', phone: '9876543351', registerNumber: 'TP1', role: 'TEAM_LEAD' },
-            { name: 'T2', email: 'tamper2@col.edu', phone: '9876543352', registerNumber: 'TP2', role: 'MEMBER' },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
+    await test('21. Client cannot self-approve; registration_status is always PENDING', async () => {
+      const res = await postRegistration({
+        teamName: 'Sneaky Approvers',
+        college: 'GCT',
+        department: 'CSE',
+        registrationStatus: 'APPROVED', // Client tries to sneak in APPROVED
+        registration_status: 'APPROVED',
+        whatsapp_group_joined: true,
+        members: [
+          { name: 'S1', email: 's1@gct.ac.in', phone: '9876543351', registerNumber: 'SN01', role: 'TEAM_LEAD' },
+          { name: 'S2', email: 's2@gct.ac.in', phone: '9876543352', registerNumber: 'SN02', role: 'MEMBER' },
+        ],
+      });
 
       assert(res.status === 201, `Expected 201, got ${res.status}`);
-      assert(res.data.fee === 100, `Expected server fee 100, got ${res.data.fee}`);
-    });
+      assert(res.data.registrationStatus === 'PENDING', 'Must always be PENDING');
 
-    // --------------------------------------------------------------------------
-    // Test 16: Server ignores client-provided registration_status (always PENDING)
-    // --------------------------------------------------------------------------
-    await test('16. Client cannot self-approve; registration_status is always PENDING', async () => {
-      const res = await postRegistration(
-        {
-          teamName: 'Self Approvers',
-          college: 'College',
-          department: 'CSE',
-          paymentId: 'TXN_SELF_APP',
-          registration_status: 'APPROVED', // Tampered status
-          status: 'APPROVED',
-          members: JSON.stringify([
-            { name: 'SA1', email: 'selfapp1@col.edu', phone: '9876543361', registerNumber: 'SA1', role: 'TEAM_LEAD' },
-            { name: 'SA2', email: 'selfapp2@col.edu', phone: '9876543362', registerNumber: 'SA2', role: 'MEMBER' },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'proof.png',
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
-
-      assert(res.status === 201, `Expected 201, got ${res.status}`);
-      assert(res.data.registrationStatus === 'PENDING', 'Status must strictly be PENDING');
-
-      // Verify in DB directly
-      const dbCheck = await query(
+      const checkDb = await query(
         'SELECT registration_status FROM teams WHERE name = $1;',
-        ['Self Approvers']
+        ['Sneaky Approvers']
       );
-      assert(dbCheck.rows[0].registration_status === 'PENDING', 'DB status must be PENDING');
+      assert(checkDb.rows[0].registration_status === 'PENDING', 'Database status must be PENDING');
     });
 
     // --------------------------------------------------------------------------
-    // Test 17: Real file validation: spoofed MIME type and invalid magic bytes rejected
+    // Test 22: Concurrent duplicate team registration handled safely
     // --------------------------------------------------------------------------
-    await test('17. Real file validation: text file pretending to be PNG is rejected', async () => {
-      const res = await postRegistration(
-        {
-          teamName: 'Spoof Team',
-          college: 'College',
-          department: 'CSE',
-          paymentId: 'TXN_SPOOF',
-          members: JSON.stringify([
-            { name: 'SP1', email: 'spoof1@col.edu', phone: '9876543371', registerNumber: 'SP1', role: 'TEAM_LEAD' },
-            { name: 'SP2', email: 'spoof2@col.edu', phone: '9876543372', registerNumber: 'SP2', role: 'MEMBER' },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'fake.png',
-          mimetype: 'image/png', // Declared as PNG, but buffer is plain text
-          buffer: FAKE_PNG_BUFFER,
-        }
-      );
-
-      assert(res.status === 400, `Expected 400, got ${res.status}`);
-      assert(
-        res.data.message.includes('signature') || res.data.message.includes('Invalid file content'),
-        `Expected signature error, got: ${res.data.message}`
-      );
-    });
-
-    // --------------------------------------------------------------------------
-    // Test 18: Payment proof extension / MIME mismatch rejected
-    // --------------------------------------------------------------------------
-    await test('18. Extension and MIME type mismatch is rejected', async () => {
-      const res = await postRegistration(
-        {
-          teamName: 'Mismatch Team',
-          college: 'College',
-          department: 'CSE',
-          paymentId: 'TXN_MISMATCH',
-          members: JSON.stringify([
-            { name: 'MM1', email: 'mm1@col.edu', phone: '9876543381', registerNumber: 'MM1', role: 'TEAM_LEAD' },
-            { name: 'MM2', email: 'mm2@col.edu', phone: '9876543382', registerNumber: 'MM2', role: 'MEMBER' },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: 'image.jpg', // JPG extension
-          mimetype: 'application/pdf', // Mismatched declared MIME
-          buffer: VALID_JPEG_BUFFER,
-        }
-      );
-
-      assert(res.status === 400, `Expected 400 for mismatch, got ${res.status}`);
-    });
-
-    // --------------------------------------------------------------------------
-    // Test 19: Path traversal attack rejected (original filename cannot control storage)
-    // --------------------------------------------------------------------------
-    await test('19. Path traversal attempt in filename rejected / randomized by server', async () => {
-      const res = await postRegistration(
-        {
-          teamName: 'Traversal Team',
-          college: 'College',
-          department: 'CSE',
-          paymentId: 'TXN_TRAVERSAL',
-          members: JSON.stringify([
-            { name: 'TR1', email: 'tr1@col.edu', phone: '9876543391', registerNumber: 'TR1', role: 'TEAM_LEAD' },
-            { name: 'TR2', email: 'tr2@col.edu', phone: '9876543392', registerNumber: 'TR2', role: 'MEMBER' },
-          ]),
-        },
-        {
-          fieldname: 'paymentProof',
-          filename: '../../../../etc/passwd.png', // Malicious traversal attempt
-          mimetype: 'image/png',
-          buffer: VALID_PNG_BUFFER,
-        }
-      );
-
-      assert(res.status === 201, `Expected 201, got ${res.status}`);
-
-      // Verify that the file was stored with a randomized server filename in uploads/payment-proofs/
-      const checkTeam = await query(
-        'SELECT payment_proof_path FROM teams WHERE name = $1;',
-        ['Traversal Team']
-      );
-      const storedPath = checkTeam.rows[0].payment_proof_path;
-      assert(storedPath.startsWith('uploads/payment-proofs/proof-'), 'Must use safe server-generated prefix');
-      assert(!storedPath.includes('..'), 'Must not contain path traversal dots');
-    });
-
-    // --------------------------------------------------------------------------
-    // Test 20: GET /api/registration/event returns safe public event metadata
-    // --------------------------------------------------------------------------
-    await test('20. GET /api/registration/event returns safe event metadata without internal IDs', async () => {
-      const res = await fetch(`${baseUrl}/api/registration/event`);
-      const data = await res.json();
-
-      assert(res.status === 200, `Expected 200, got ${res.status}`);
-      assert(data.success === true, 'Expected success true');
-      assert(data.registrationOpen === true, 'Expected registrationOpen true');
-      assert(data.feePerMember === 50, 'Fee per member must be 50');
-      assert(data.event.name === 'Module 4 Registration Test Event', 'Event name matches');
-      assert(!data.event.id && !data.event.event_id, 'Must NOT expose internal database IDs');
-    });
-
-    // --------------------------------------------------------------------------
-    // Test 21: Concurrent duplicate team registration handled safely
-    // --------------------------------------------------------------------------
-    await test('21. Concurrent duplicate team registration handled safely', async () => {
+    await test('22. Concurrent duplicate team registration handled safely', async () => {
       const payload1 = {
         teamName: 'Concurrent Racers',
         college: 'PSG',
         department: 'CSE',
-        paymentId: 'TXN_RACE_1',
-        members: JSON.stringify([
+        whatsapp_group_joined: true,
+        members: [
           { name: 'R1', email: 'race1@col.edu', phone: '9876543401', registerNumber: 'RC01', role: 'TEAM_LEAD' },
           { name: 'R2', email: 'race2@col.edu', phone: '9876543402', registerNumber: 'RC02', role: 'MEMBER' },
-        ]),
+        ],
       };
       const payload2 = {
         teamName: 'Concurrent Racers', // SAME team name
         college: 'PSG',
         department: 'CSE',
-        paymentId: 'TXN_RACE_2',
-        members: JSON.stringify([
+        whatsapp_group_joined: true,
+        members: [
           { name: 'R3', email: 'race3@col.edu', phone: '9876543403', registerNumber: 'RC03', role: 'TEAM_LEAD' },
           { name: 'R4', email: 'race4@col.edu', phone: '9876543404', registerNumber: 'RC04', role: 'MEMBER' },
-        ]),
-      };
-
-      const file1 = {
-        fieldname: 'paymentProof',
-        filename: 'proof1.png',
-        mimetype: 'image/png',
-        buffer: VALID_PNG_BUFFER,
-      };
-      const file2 = {
-        fieldname: 'paymentProof',
-        filename: 'proof2.png',
-        mimetype: 'image/png',
-        buffer: VALID_PNG_BUFFER,
+        ],
       };
 
       const [res1, res2] = await Promise.all([
-        postRegistration(payload1, file1),
-        postRegistration(payload2, file2),
+        postRegistration(payload1),
+        postRegistration(payload2),
       ]);
 
       const statuses = [res1.status, res2.status].sort();

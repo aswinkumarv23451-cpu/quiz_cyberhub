@@ -2,7 +2,7 @@ import { apiClient } from './apiClient';
 
 /**
  * Fetches the currently open event and registration parameters.
- * @returns {Promise<{ success: boolean, registrationOpen: boolean, event?: Object, feePerMember?: number }>}
+ * @returns {Promise<{ success: boolean, registrationOpen: boolean, event?: Object, whatsappGroupLink?: string }>}
  */
 export const getRegistrationEvent = async () => {
   return await apiClient('/api/registration/event', {
@@ -11,13 +11,16 @@ export const getRegistrationEvent = async () => {
 };
 
 /**
- * Submits team registration form data including payment proof file.
- * @param {FormData} formData
- * @returns {Promise<{ success: boolean, message: string, registrationStatus: string, teamName: string, memberCount: number, fee: number }>}
+ * Submits team registration form data (free registration with WhatsApp confirmation).
+ * Supports plain JSON object or FormData.
+ * @param {Object|FormData} data
+ * @returns {Promise<{ success: boolean, message: string, registrationStatus: string, teamName: string, memberCount: number, whatsappGroupJoined: boolean }>}
  */
-export const registerTeam = async (formData) => {
+export const registerTeam = async (data) => {
+  const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
   return await apiClient('/api/registration', {
     method: 'POST',
-    body: formData,
+    body: isFormData ? data : JSON.stringify(data),
   });
 };
+

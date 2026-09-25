@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getAdminLeaderboard } from '../services/adminService';
+import { getAdminLeaderboard, downloadLeaderboardCsv } from '../services/adminService';
 
 export default function AdminLeaderboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [downloadingCsv, setDownloadingCsv] = useState(false);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('ALL'); // 'ALL' | 'COMPLETED' | 'IN_PROGRESS' | 'NOT_STARTED'
 
@@ -25,6 +26,17 @@ export default function AdminLeaderboard() {
   useEffect(() => {
     fetchLeaderboard();
   }, [fetchLeaderboard]);
+
+  const handleDownloadCsv = async () => {
+    try {
+      setDownloadingCsv(true);
+      await downloadLeaderboardCsv(data?.event?.id);
+    } catch (err) {
+      alert(err.message || 'Failed to download leaderboard CSV.');
+    } finally {
+      setDownloadingCsv(false);
+    }
+  };
 
   const formatDuration = (seconds) => {
     if (seconds === null || seconds === undefined) return '—';
@@ -143,14 +155,24 @@ export default function AdminLeaderboard() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={fetchLeaderboard}
-          disabled={loading}
-          className="px-3.5 py-2 text-xs font-medium text-slate-300 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-lg transition flex items-center gap-1.5 self-end sm:self-center disabled:opacity-50"
-        >
-          <span className={loading ? 'animate-spin' : ''}>↻</span> Refresh
-        </button>
+        <div className="flex items-center gap-2 self-end sm:self-center">
+          <button
+            type="button"
+            onClick={handleDownloadCsv}
+            disabled={downloadingCsv}
+            className="px-3.5 py-2 text-xs font-semibold text-indigo-300 bg-indigo-950/50 hover:bg-indigo-900/60 border border-indigo-800/60 rounded-lg transition flex items-center gap-1.5 disabled:opacity-50 shadow-sm"
+          >
+            <span>📥</span> {downloadingCsv ? 'Downloading...' : 'Export CSV'}
+          </button>
+          <button
+            type="button"
+            onClick={fetchLeaderboard}
+            disabled={loading}
+            className="px-3.5 py-2 text-xs font-medium text-slate-300 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-lg transition flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <span className={loading ? 'animate-spin' : ''}>↻</span> Refresh
+          </button>
+        </div>
       </div>
 
       {/* Error Notice */}

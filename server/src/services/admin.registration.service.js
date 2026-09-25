@@ -213,8 +213,7 @@ export const getRegistrationStats = async () => {
  * Validations:
  * - Team must exist
  * - Team must be PENDING (not APPROVED or REJECTED)
- * - Team must have a payment_id
- * - Team must have a valid payment proof file on disk
+ * (Registration is free: payment_id and payment_proof_path are NOT required)
  *
  * @param {string} teamId
  * @returns {Promise<Object>}
@@ -233,7 +232,7 @@ export const approveRegistration = async (teamId) => {
 
     // Lock the row to prevent concurrent state transitions
     const lockSql = `
-      SELECT id, registration_status, payment_id, payment_proof_path
+      SELECT id, registration_status
       FROM teams
       WHERE id = $1
       FOR UPDATE;
@@ -256,26 +255,6 @@ export const approveRegistration = async (teamId) => {
         `Cannot approve: registration is already ${team.registration_status}.`
       );
       err.statusCode = 409;
-      throw err;
-    }
-
-    // Verify payment_id exists
-    if (!team.payment_id || team.payment_id.trim().length === 0) {
-      await client.query('ROLLBACK');
-      const err = new Error('Cannot approve: no payment ID on record.');
-      err.statusCode = 400;
-      throw err;
-    }
-
-    // Verify payment proof file exists on disk
-    const proofExists = team.payment_proof_path
-      ? await paymentProofStorage.exists(team.payment_proof_path)
-      : false;
-
-    if (!proofExists) {
-      await client.query('ROLLBACK');
-      const err = new Error('Cannot approve: payment proof file is missing.');
-      err.statusCode = 400;
       throw err;
     }
 

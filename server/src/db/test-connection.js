@@ -182,6 +182,16 @@ async function test() {
       `   attempts.current_question_started_at:     ${colCheck.rows.length > 0 ? '✓' : '✗ MISSING'}`
     );
 
+    // 5i. Column check for teams.whatsapp_group_joined
+    const waColCheck = await query(`
+      SELECT column_name, data_type
+      FROM information_schema.columns
+      WHERE table_name = 'teams' AND column_name = 'whatsapp_group_joined'
+    `);
+    console.log(
+      `   teams.whatsapp_group_joined:              ${waColCheck.rows.length > 0 ? '✓' : '✗ MISSING'}`
+    );
+
     // ── 6. Verify triggers ──────────────────────────────────────────────
     console.log('\n6. Checking updated_at triggers...');
     const triggers = await query(`

@@ -34,8 +34,8 @@
  * 21. Approving already-APPROVED team rejected (409 Conflict)
  * 22. Approving REJECTED team rejected (409 Conflict)
  * 23. Approving nonexistent team returns 404
- * 24. Approval blocked when payment ID is missing (400)
- * 25. Approval blocked when payment proof file is missing on disk (400)
+ * 24. Free registration approval succeeds when payment ID is absent/empty
+ * 25. Free registration approval succeeds when payment proof is absent (payment fields ignored)
  *
  * State Machine — Rejection:
  * 26. Admin successfully rejects PENDING team
@@ -549,22 +549,30 @@ const runTests = async () => {
       assert(getErrorMsg(res).includes('not found'), 'Expected generic 404');
     });
 
-    await test('24. Approval blocked when payment ID is missing (400 Bad Request)', async () => {
+    await test('24. Free registration approval succeeds when payment ID is absent/empty', async () => {
       const res = await apiRequest(`/api/admin/registrations/${teamWithoutPaymentId}/approve`, {
         method: 'POST',
         cookie: adminCookie,
       });
-      assert(res.status === 400, `Expected 400, got ${res.status}`);
-      assert(getErrorMsg(res).includes('no payment ID on record'), `Expected payment ID error, got: ${getErrorMsg(res)}`);
+      assert(res.status === 200, `Expected 200, got ${res.status}`);
+      assert(res.data.success === true, 'Expected success=true');
+      assert(res.data.registrationStatus === 'APPROVED', 'Expected status APPROVED');
+
+      const dbCheck = await query('SELECT registration_status FROM teams WHERE id = $1', [teamWithoutPaymentId]);
+      assert(dbCheck.rows[0].registration_status === 'APPROVED', 'Expected DB status APPROVED');
     });
 
-    await test('25. Approval blocked when payment proof file is missing on disk (400 Bad Request)', async () => {
+    await test('25. Free registration approval succeeds when payment proof is absent (payment fields ignored)', async () => {
       const res = await apiRequest(`/api/admin/registrations/${teamWithoutProofId}/approve`, {
         method: 'POST',
         cookie: adminCookie,
       });
-      assert(res.status === 400, `Expected 400, got ${res.status}`);
-      assert(getErrorMsg(res).includes('payment proof file is missing'), `Expected proof file missing error, got: ${getErrorMsg(res)}`);
+      assert(res.status === 200, `Expected 200, got ${res.status}`);
+      assert(res.data.success === true, 'Expected success=true');
+      assert(res.data.registrationStatus === 'APPROVED', 'Expected status APPROVED');
+
+      const dbCheck = await query('SELECT registration_status FROM teams WHERE id = $1', [teamWithoutProofId]);
+      assert(dbCheck.rows[0].registration_status === 'APPROVED', 'Expected DB status APPROVED');
     });
 
     // =========================================================================

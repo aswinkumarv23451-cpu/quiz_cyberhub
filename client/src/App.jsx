@@ -26,13 +26,12 @@ function App() {
   const [loginMessage, setLoginMessage] = useState(null);
   const [cooldown, setCooldown] = useState(0);
 
-  // Registration State (Module 4)
-  const [regEventInfo, setRegEventInfo] = useState({ loading: true, open: false, data: null });
+  // Registration State (Module 4 & Production Update)
+  const [regEventInfo, setRegEventInfo] = useState({ loading: true, open: false, data: null, whatsappGroupLink: '' });
   const [teamName, setTeamName] = useState('');
   const [college, setCollege] = useState('');
   const [department, setDepartment] = useState('');
-  const [paymentId, setPaymentId] = useState('');
-  const [paymentProofFile, setPaymentProofFile] = useState(null);
+  const [whatsappJoined, setWhatsappJoined] = useState(false);
   const [members, setMembers] = useState([
     { name: '', email: '', phone: '', registerNumber: '', isLead: true },
     { name: '', email: '', phone: '', registerNumber: '', isLead: false },
@@ -63,10 +62,11 @@ function App() {
           loading: false,
           open: Boolean(res?.registrationOpen),
           data: res?.event,
+          whatsappGroupLink: res?.whatsappGroupLink || '',
         });
       })
       .catch(() => {
-        setRegEventInfo({ loading: false, open: false, data: null });
+        setRegEventInfo({ loading: false, open: false, data: null, whatsappGroupLink: '' });
       });
   }, []);
 
@@ -184,6 +184,14 @@ function App() {
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
+    if (!whatsappJoined) {
+      setRegMessage({
+        type: 'error',
+        text: 'You must confirm that you have joined the official WhatsApp group before registering.',
+      });
+      return;
+    }
+
     setRegLoading(true);
     setRegMessage(null);
 
@@ -197,18 +205,15 @@ function App() {
         role: m.isLead ? 'TEAM_LEAD' : 'MEMBER',
       }));
 
-      const formData = new FormData();
-      formData.append('teamName', teamName.trim());
-      formData.append('college', college.trim());
-      formData.append('department', department.trim());
-      formData.append('paymentId', paymentId.trim());
-      formData.append('members', JSON.stringify(formattedMembers));
+      const payload = {
+        teamName: teamName.trim(),
+        college: college.trim(),
+        department: department.trim(),
+        whatsapp_group_joined: true,
+        members: formattedMembers,
+      };
 
-      if (paymentProofFile) {
-        formData.append('paymentProof', paymentProofFile);
-      }
-
-      const res = await registerTeam(formData);
+      const res = await registerTeam(payload);
       setRegistrationSuccess(res);
       setRegMessage({ type: 'success', text: res.message });
     } catch (err) {
@@ -225,8 +230,7 @@ function App() {
     setTeamName('');
     setCollege('');
     setDepartment('');
-    setPaymentId('');
-    setPaymentProofFile(null);
+    setWhatsappJoined(false);
     setMembers([
       { name: '', email: '', phone: '', registerNumber: '', isLead: true },
       { name: '', email: '', phone: '', registerNumber: '', isLead: false },
@@ -234,8 +238,6 @@ function App() {
     setRegistrationSuccess(null);
     setRegMessage(null);
   };
-
-  const calculatedFee = members.length * 50;
 
   // Render Admin Dashboard when authenticated as ADMIN
   if (session?.role === 'ADMIN') {
@@ -506,15 +508,21 @@ function App() {
                     </span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-850">
-                    <span className="text-slate-400">Total Fee:</span>
-                    <span className="font-mono text-emerald-400">
-                      ₹{registrationSuccess.fee}
+                    <span className="text-slate-400">Registration Fee:</span>
+                    <span className="font-mono text-emerald-400 font-bold">
+                      FREE
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-850">
+                    <span className="text-slate-400">WhatsApp Group:</span>
+                    <span className="font-medium text-emerald-400">
+                      Confirmed Joined
                     </span>
                   </div>
                 </div>
 
                 <div className="text-xs text-slate-400 bg-slate-900 p-3 rounded border border-slate-800">
-                  Your registration and payment proof have been submitted for administrative verification. Once approved, the designated Team Lead can sign in using their registered email.
+                  Your registration has been submitted for administrative verification. Once approved, the designated Team Lead can sign in using their registered email. Competition instructions and announcements will be shared in the official WhatsApp group.
                 </div>
 
                 <button
@@ -530,7 +538,7 @@ function App() {
               <form onSubmit={handleRegisterSubmit} className="space-y-5">
                 {/* Event Tag */}
                 <div className="text-xs text-indigo-300 bg-indigo-950/40 p-2.5 rounded border border-indigo-900/60">
-                  Event: <span className="font-semibold text-indigo-200">{regEventInfo.data?.name}</span> (₹50 per member)
+                  Event: <span className="font-semibold text-indigo-200">{regEventInfo.data?.name}</span> (Free Entry)
                 </div>
 
                 {/* Team Details */}
@@ -674,51 +682,50 @@ function App() {
                   </div>
                 </div>
 
-                {/* Payment Section & Proof Upload */}
-                <div className="space-y-3 bg-slate-950/40 p-3.5 rounded-lg border border-slate-850">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                      Payment Verification
+                {/* Official WhatsApp Group Section */}
+                <div className="space-y-3 bg-slate-950/40 p-4 rounded-lg border border-slate-850">
+                  <div>
+                    <h4 className="text-sm font-semibold uppercase tracking-wider text-emerald-400">
+                      Official WhatsApp Group
                     </h4>
-                    <span className="text-xs font-mono font-bold text-emerald-400">
-                      Total Fee: ₹{calculatedFee} ({members.length} × ₹50)
-                    </span>
+                    <p className="text-xs text-slate-300 mt-1">
+                      Join the official WhatsApp group to receive competition instructions and important announcements.
+                    </p>
                   </div>
 
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">
-                      Transaction / UTR / Reference ID
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={paymentId}
-                      onChange={(e) => setPaymentId(e.target.value)}
-                      placeholder="e.g. UPI/NEFT/IMPS reference number"
-                      className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                    />
+                    <a
+                      href={regEventInfo.whatsappGroupLink || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center py-2 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-md shadow-sm transition"
+                    >
+                      JOIN WHATSAPP GROUP
+                    </a>
                   </div>
 
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">
-                      Payment Proof Screenshot or PDF (Max 5 MB)
+                  <div className="pt-2 border-t border-slate-800">
+                    <label className="flex items-center space-x-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        required
+                        checked={whatsappJoined}
+                        onChange={(e) => setWhatsappJoined(e.target.checked)}
+                        className="w-4 h-4 rounded text-emerald-600 bg-slate-950 border-slate-700 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                      />
+                      <span className="text-xs text-slate-200 font-medium">
+                        I have joined the official WhatsApp group
+                      </span>
                     </label>
-                    <input
-                      type="file"
-                      required
-                      accept=".jpg,.jpeg,.png,.webp,.pdf"
-                      onChange={(e) => setPaymentProofFile(e.target.files?.[0] || null)}
-                      className="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-750 cursor-pointer"
-                    />
                   </div>
                 </div>
 
                 <button
                   type="submit"
-                  disabled={regLoading || !paymentProofFile}
+                  disabled={regLoading || !whatsappJoined}
                   className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium rounded-md transition"
                 >
-                  {regLoading ? 'Processing Registration...' : `Submit Registration (₹${calculatedFee})`}
+                  {regLoading ? 'Processing Registration...' : 'Submit Registration'}
                 </button>
               </form>
             )}

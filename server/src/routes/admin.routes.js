@@ -25,6 +25,11 @@ import {
   getMonitoringOverviewController,
   getTeamMonitoringDetailController,
 } from '../controllers/admin.monitoring.controller.js';
+import {
+  downloadLeaderboardCsvController,
+  downloadRegistrationsCsvController,
+} from '../controllers/admin.exports.controller.js';
+import { handleResetTestEvent } from '../controllers/admin.reset.controller.js';
 
 const router = express.Router();
 
@@ -37,12 +42,20 @@ const router = express.Router();
  */
 router.use(requireAuth, requireAdmin);
 
+// Safe Test Event Reset Route (Module 12)
+router.post('/test-reset', handleResetTestEvent);
+
 // Event Lifecycle Routes (Module 7)
 router.post('/event/start', handleStartEventAdmin);
 router.post('/event/end', handleEndEventAdmin);
 
 // Leaderboard Routes (Module 8)
 router.get('/leaderboard', getLeaderboardController);
+
+// Export Routes (Module 11) — Admin-only CSV downloads
+// Both endpoints inherit requireAuth + requireAdmin from router.use() above
+router.get('/exports/leaderboard.csv', downloadLeaderboardCsvController);
+router.get('/exports/registrations.csv', downloadRegistrationsCsvController);
 
 // Operational Monitoring Routes (Module 9)
 router.get('/monitoring', getMonitoringOverviewController);

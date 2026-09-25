@@ -4,9 +4,6 @@ import {
   normalizeIndianPhone,
   validateRegisterNumber,
 } from '../utils/validation.utils.js';
-import { paymentProofStorage } from './storage/paymentProofStorage.js';
-
-const FEE_PER_MEMBER = 50;
 
 /**
  * Retrieves the currently active event open for registration.
@@ -147,30 +144,43 @@ export const validateMembers = (members) => {
 
 /**
  * Handles complete team registration atomically inside a PostgreSQL transaction.
- * Coordinates database operations and file storage cleanup on failure.
+ * Free registration: Payment is not required.
+ * WhatsApp group confirmation is mandatory.
  *
  * @param {Object} params
  * @param {string} params.teamName
  * @param {string} params.college
  * @param {string} params.department
- * @param {string} params.paymentId
+ * @param {boolean|string} params.whatsappGroupJoined
  * @param {Array<Object>} params.members
- * @param {Object} params.file - Multer file object
  * @returns {Promise<Object>} Safe registration summary (NO internal UUIDs)
  */
 export const registerTeam = async ({
   teamName,
   college,
   department,
-  paymentId,
+  whatsappGroupJoined,
   members,
-  file,
 }) => {
-  // 1. Basic field sanitization
+  // 1. WhatsApp Group confirmation validation (MANDATORY)
+  const isWhatsappJoined =
+    whatsappGroupJoined === true ||
+    whatsappGroupJoined === 'true' ||
+    whatsappGroupJoined === 1 ||
+    whatsappGroupJoined === '1';
+
+  if (!isWhatsappJoined) {
+    const err = new Error(
+      'You must confirm that you have joined the official WhatsApp group.'
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // 2. Basic field sanitization
   const cleanTeamName = (teamName || '').trim();
   const cleanCollege = (college || '').trim();
   const cleanDepartment = (department || '').trim();
-  const cleanPaymentId = (paymentId || '').trim();
 
   if (!cleanTeamName || cleanTeamName.length < 2 || cleanTeamName.length > 255) {
     const err = new Error('Team name must be between 2 and 255 characters.');
@@ -187,29 +197,14 @@ export const registerTeam = async ({
     err.statusCode = 400;
     throw err;
   }
-  if (!cleanPaymentId || cleanPaymentId.length < 3 || cleanPaymentId.length > 255) {
-    const err = new Error('Payment / Transaction ID must be provided.');
-    err.statusCode = 400;
-    throw err;
-  }
-
-  // 2. Validate payment proof file presence
-  if (!file || !file.buffer || file.buffer.length === 0) {
-    const err = new Error('Payment proof screenshot or document is required.');
-    err.statusCode = 400;
-    throw err;
-  }
 
   // 3. Validate members structure
   const validatedMembers = validateMembers(members);
 
-  // 4. Server-authoritative fee calculation (ignores any client-submitted amount)
-  const calculatedFee = validatedMembers.length * FEE_PER_MEMBER;
-
-  // 5. Determine active event strictly from server (client cannot choose event_id)
+  // 4. Determine active event strictly from server (client cannot choose event_id)
   const activeEvent = await getActiveEventForRegistration();
 
-  // 6. Pre-check: Duplicate team name within this event
+  // 5. Pre-check: Duplicate team name within this event
   const teamCheckSql = `
     SELECT id FROM teams
     WHERE LOWER(name) = LOWER($1) AND event_id = $2
@@ -222,7 +217,7 @@ export const registerTeam = async ({
     throw err;
   }
 
-  // 7. Pre-check: Duplicate member participation in this event (Anti-Enumeration)
+  // 6. Pre-check: Duplicate member participation in this event (Anti-Enumeration)
   const memberEmails = validatedMembers.map((m) => m.email);
   const memberCheckSql = `
     SELECT tm.id
@@ -239,27 +234,13 @@ export const registerTeam = async ({
     throw err;
   }
 
-  // 8. Save payment proof via storage abstraction
-  let storageRef = null;
-  try {
-    storageRef = await paymentProofStorage.saveProof(
-      file.buffer,
-      file.originalname,
-      file.mimetype
-    );
-  } catch (storageErr) {
-    const err = new Error(storageErr.message || 'Failed to process payment proof upload.');
-    err.statusCode = storageErr.statusCode || 400;
-    throw err;
-  }
-
-  // 9. Atomic Database Transaction
+  // 7. Atomic Database Transaction
   const dbClient = await getClient();
 
   try {
     await dbClient.query('BEGIN');
 
-    // 9a. Process Users (Existing users: reuse ID without overwriting name or phone)
+    // 7a. Process Users (Existing users: reuse ID without overwriting name or phone)
     const memberUserIds = [];
 
     for (const member of validatedMembers) {
@@ -293,7 +274,7 @@ export const registerTeam = async ({
       });
     }
 
-    // 9b. Insert Team (registration_status is strictly PENDING)
+    // 7b. Insert Team (registration_status is strictly PENDING, whatsapp_group_joined = true)
     const insertTeamSql = `
       INSERT INTO teams (
         name,
@@ -301,10 +282,9 @@ export const registerTeam = async ({
         college,
         department,
         registration_status,
-        payment_id,
-        payment_proof_path
+        whatsapp_group_joined
       )
-      VALUES ($1, $2, $3, $4, 'PENDING', $5, $6)
+      VALUES ($1, $2, $3, $4, 'PENDING', $5)
       RETURNING id;
     `;
     const insertTeamRes = await dbClient.query(insertTeamSql, [
@@ -312,12 +292,11 @@ export const registerTeam = async ({
       activeEvent.id,
       cleanCollege,
       cleanDepartment,
-      cleanPaymentId,
-      storageRef,
+      true,
     ]);
     const teamId = insertTeamRes.rows[0].id;
 
-    // 9c. Insert Team Members
+    // 7c. Insert Team Members
     for (const m of memberUserIds) {
       const insertMemberSql = `
         INSERT INTO team_members (
@@ -341,7 +320,7 @@ export const registerTeam = async ({
     // Commit Transaction
     await dbClient.query('COMMIT');
 
-    // 10. Return safe confirmation summary (NO internal UUIDs or Team IDs)
+    // 8. Return safe confirmation summary (NO internal UUIDs, NO payment fields)
     return {
       success: true,
       message:
@@ -351,16 +330,11 @@ export const registerTeam = async ({
       college: cleanCollege,
       department: cleanDepartment,
       memberCount: validatedMembers.length,
-      fee: calculatedFee,
+      whatsappGroupJoined: true,
     };
   } catch (dbError) {
     // Rollback transaction
     await dbClient.query('ROLLBACK');
-
-    // Cleanup uploaded file from disk on any database failure
-    if (storageRef) {
-      await paymentProofStorage.deleteProof(storageRef);
-    }
 
     // Handle concurrent duplicate constraint violations safely
     if (dbError.code === '23505') {

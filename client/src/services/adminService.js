@@ -160,5 +160,101 @@ export const getTeamMonitoringDetail = async (teamId) => {
   return await apiClient(`/api/admin/monitoring/team/${encodeURIComponent(teamId)}`);
 };
 
+/**
+ * Admin: Downloads the official leaderboard as a CSV file.
+ * @param {string} [eventId]
+ * @returns {Promise<void>}
+ */
+export const downloadLeaderboardCsv = async (eventId) => {
+  const qs = eventId ? `?eventId=${encodeURIComponent(eventId)}` : '';
+  const url = `${BASE_URL}/api/admin/exports/leaderboard.csv${qs}`;
+  const response = await fetch(url, {
+    credentials: 'include',
+  });
 
+  if (!response.ok) {
+    let errorMsg = 'Failed to download leaderboard CSV';
+    try {
+      const errData = await response.json();
+      if (errData.message) errorMsg = errData.message;
+    } catch (_) {}
+    throw new Error(errorMsg);
+  }
 
+  let filename = 'round1-leaderboard.csv';
+  const disposition = response.headers.get('content-disposition');
+  if (disposition && disposition.includes('filename=')) {
+    const match = disposition.match(/filename="?([^";]+)"?/);
+    if (match && match[1]) {
+      filename = match[1];
+    }
+  }
+
+  const blob = await response.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(blobUrl);
+};
+
+/**
+ * Admin: Downloads registered participants and teams as a CSV file.
+ * @param {string} [eventId]
+ * @returns {Promise<void>}
+ */
+export const downloadRegistrationsCsv = async (eventId) => {
+  const qs = eventId ? `?eventId=${encodeURIComponent(eventId)}` : '';
+  const url = `${BASE_URL}/api/admin/exports/registrations.csv${qs}`;
+  const response = await fetch(url, {
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    let errorMsg = 'Failed to download registrations CSV';
+    try {
+      const errData = await response.json();
+      if (errData.message) errorMsg = errData.message;
+    } catch (_) {}
+    throw new Error(errorMsg);
+  }
+
+  let filename = 'round1-registrations.csv';
+  const disposition = response.headers.get('content-disposition');
+  if (disposition && disposition.includes('filename=')) {
+    const match = disposition.match(/filename="?([^";]+)"?/);
+    if (match && match[1]) {
+      filename = match[1];
+    }
+  }
+
+  const blob = await response.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(blobUrl);
+};
+
+/**
+ * Admin: Resets development/test event data.
+ * Permanently removes test teams, members, attempts, answers, and participant users for the selected event.
+ * Sets event status to READY. Questions and admin accounts are preserved.
+ *
+ * @param {Object} params
+ * @param {string} params.eventId
+ * @param {string} params.confirmation - Must be 'RESET ROUND 1'
+ * @returns {Promise<{ success: boolean, message: string, eventId: string, deleted: Object }>}
+ */
+export const resetTestEvent = async ({ eventId, confirmation }) => {
+  return await apiClient('/api/admin/test-reset', {
+    method: 'POST',
+    body: JSON.stringify({ eventId, confirmation }),
+  });
+};

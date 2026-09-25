@@ -12,6 +12,8 @@ import {
 import QuestionManagement from './QuestionManagement';
 import AdminLeaderboard from './AdminLeaderboard';
 import AdminMonitoring from './AdminMonitoring';
+import AdminExports from './AdminExports';
+import AdminTestReset from './AdminTestReset';
 
 export default function AdminDashboard({ session, onLogout }) {
   // Navigation section: 'registrations' | 'questions' | 'leaderboard'
@@ -334,6 +336,28 @@ export default function AdminDashboard({ session, onLogout }) {
         >
           <span>📡</span> Live Monitoring
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveSection('exports')}
+          className={`pb-3 px-3 text-sm font-semibold border-b-2 transition flex items-center gap-2 ${
+            activeSection === 'exports'
+              ? 'border-indigo-500 text-indigo-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <span>⬇️</span> Data Exports
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveSection('dev-utilities')}
+          className={`pb-3 px-3 text-sm font-semibold border-b-2 transition flex items-center gap-2 ${
+            activeSection === 'dev-utilities'
+              ? 'border-rose-500 text-rose-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <span>🛠️</span> Dev Utilities
+        </button>
       </div>
 
       {activeSection === 'questions' && <QuestionManagement />}
@@ -341,6 +365,17 @@ export default function AdminDashboard({ session, onLogout }) {
       {activeSection === 'leaderboard' && <AdminLeaderboard />}
 
       {activeSection === 'monitoring' && <AdminMonitoring />}
+
+      {activeSection === 'exports' && <AdminExports />}
+
+      {activeSection === 'dev-utilities' && (
+        <AdminTestReset
+          onResetSuccess={async () => {
+            await fetchStats();
+            await fetchRegistrations(1, 10, statusFilter, searchTerm);
+          }}
+        />
+      )}
 
       {activeSection === 'registrations' && (
         <>
