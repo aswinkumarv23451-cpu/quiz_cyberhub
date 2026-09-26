@@ -12,12 +12,18 @@ export const isEmailConfigured = () => {
   if (config.email.provider === 'test' || config.nodeEnv === 'test') {
     return true;
   }
-  if (config.email.provider === 'resend' || config.email.resendApiKey) {
+  if (config.email.provider === 'agentmail') {
+    return Boolean(config.email.agentmailApiKey);
+  }
+  if (config.email.provider === 'resend') {
     return Boolean(config.email.resendApiKey);
   }
   if (config.email.provider === 'smtp') {
     return Boolean(config.email.smtpHost && config.email.smtpUser);
   }
+  if (config.email.agentmailApiKey) return true;
+  if (config.email.resendApiKey) return true;
+  if (config.email.smtpHost && config.email.smtpUser) return true;
   return false;
 };
 
@@ -48,7 +54,7 @@ export const sendOtpEmail = async ({ to, otp }) => {
   // 2. Unconfigured provider check
   if (!isEmailConfigured()) {
     throw new Error(
-      'Email provider is unconfigured. Set RESEND_API_KEY (or SMTP credentials) in environment.'
+      'Email provider is unconfigured. Set AGENTMAIL_API_KEY, RESEND_API_KEY, or SMTP credentials in environment.'
     );
   }
 
@@ -73,8 +79,47 @@ export const sendOtpEmail = async ({ to, otp }) => {
       </div>
     `;
 
-  // 3. Resend HTTPS API delivery
-  if (config.email.provider === 'resend' || config.email.resendApiKey) {
+  // 3. AgentMail HTTPS API delivery
+  if (
+    config.email.provider === 'agentmail' ||
+    (!['resend', 'smtp'].includes(config.email.provider) && config.email.agentmailApiKey)
+  ) {
+    const inboxId = config.email.agentmailInboxId || config.email.fromAddress || 'default';
+    const agentMailEndpoint = `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(inboxId)}/messages/send`;
+
+    const response = await fetch(agentMailEndpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.email.agentmailApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: [to],
+        subject,
+        text,
+        html,
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const errorMsg =
+        data.message ||
+        data.error ||
+        `AgentMail API error status ${response.status}`;
+      throw new Error(`AgentMail delivery failed: ${errorMsg}`);
+    }
+
+    const messageId = data.message_id || data.id || data.messageId || `am-${Date.now()}`;
+    return { success: true, messageId };
+  }
+
+  // 4. Resend HTTPS API delivery
+  if (
+    config.email.provider === 'resend' ||
+    (!['agentmail', 'smtp'].includes(config.email.provider) && config.email.resendApiKey)
+  ) {
     const resendResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
