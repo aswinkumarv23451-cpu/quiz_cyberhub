@@ -7,12 +7,27 @@ const { Pool } = pg;
  * PostgreSQL connection pool.
  * Uses database settings from config.db (sourced from environment variables).
  */
+const poolConfig = process.env.DATABASE_URL
+  ? {
+      connectionString: process.env.DATABASE_URL,
+      ssl:
+        process.env.DB_SSL === 'false'
+          ? false
+          : process.env.NODE_ENV === 'production' || process.env.DATABASE_URL.includes('sslmode=')
+          ? { rejectUnauthorized: false }
+          : false,
+    }
+  : {
+      host: config.db.host,
+      port: config.db.port,
+      database: config.db.name,
+      user: config.db.user,
+      password: config.db.password,
+      ...(process.env.DB_SSL === 'true' && { ssl: { rejectUnauthorized: false } }),
+    };
+
 const pool = new Pool({
-  host: config.db.host,
-  port: config.db.port,
-  database: config.db.name,
-  user: config.db.user,
-  password: config.db.password,
+  ...poolConfig,
   max: parseInt(process.env.DB_MAX_CONNECTIONS || '20', 10),
   idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT_MS || '30000', 10),
   connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT_MS || '5000', 10),
