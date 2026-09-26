@@ -12,6 +12,9 @@ export const isEmailConfigured = () => {
   if (config.email.provider === 'test' || config.nodeEnv === 'test') {
     return true;
   }
+  if (config.email.provider === 'resend' || config.email.resendApiKey) {
+    return Boolean(config.email.resendApiKey);
+  }
   if (config.email.provider === 'smtp') {
     return Boolean(config.email.smtpHost && config.email.smtpUser);
   }
@@ -45,27 +48,17 @@ export const sendOtpEmail = async ({ to, otp }) => {
   // 2. Unconfigured provider check
   if (!isEmailConfigured()) {
     throw new Error(
-      'Email provider is unconfigured. Set SMTP_HOST and SMTP_USER in environment.'
+      'Email provider is unconfigured. Set RESEND_API_KEY (or SMTP credentials) in environment.'
     );
   }
 
-  // 3. SMTP provider via nodemailer
-  const transporter = nodemailer.createTransport({
-    host: config.email.smtpHost,
-    port: config.email.smtpPort,
-    secure: config.email.smtpPort === 465,
-    auth: {
-      user: config.email.smtpUser,
-      pass: config.email.smtpPass,
-    },
-  });
+  const from = config.email.fromName
+    ? `"${config.email.fromName}" <${config.email.fromAddress}>`
+    : config.email.fromAddress;
 
-  const mailOptions = {
-    from: `"${config.email.fromName}" <${config.email.fromAddress}>`,
-    to,
-    subject: 'Your Round 1 Login Verification Code',
-    text: `Your one-time login verification code for the Round 1 Technology Competition is: ${otp}\n\nThis code will expire in 5 minutes.\nDo not share this code with anyone.\nIf you did not request this code, please ignore this email.`,
-    html: `
+  const subject = 'Your Round 1 Login Verification Code';
+  const text = `Your one-time login verification code for the Round 1 Technology Competition is: ${otp}\n\nThis code will expire in 5 minutes.\nDo not share this code with anyone.\nIf you did not request this code, please ignore this email.`;
+  const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #0f172a; color: #f8fafc; border-radius: 8px;">
         <h2 style="color: #818cf8; margin-top: 0;">Round 1 Technology Competition</h2>
         <p style="font-size: 16px; color: #cbd5e1;">Your single-use verification code is:</p>
@@ -78,7 +71,54 @@ export const sendOtpEmail = async ({ to, otp }) => {
         <hr style="border: none; border-top: 1px solid #334155; margin: 20px 0;" />
         <p style="font-size: 12px; color: #64748b;">Round 1 Competition Platform • Secure Automated Delivery</p>
       </div>
-    `,
+    `;
+
+  // 3. Resend HTTPS API delivery
+  if (config.email.provider === 'resend' || config.email.resendApiKey) {
+    const resendResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.email.resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject,
+        text,
+        html,
+      }),
+    });
+
+    const resendData = await resendResponse.json().catch(() => ({}));
+
+    if (!resendResponse.ok) {
+      const errorMsg =
+        resendData.message ||
+        `Resend API error status ${resendResponse.status}`;
+      throw new Error(`Resend delivery failed: ${errorMsg}`);
+    }
+
+    return { success: true, messageId: resendData.id };
+  }
+
+  // 4. Fallback SMTP provider via nodemailer
+  const transporter = nodemailer.createTransport({
+    host: config.email.smtpHost,
+    port: config.email.smtpPort,
+    secure: config.email.smtpPort === 465,
+    auth: {
+      user: config.email.smtpUser,
+      pass: config.email.smtpPass,
+    },
+  });
+
+  const mailOptions = {
+    from,
+    to,
+    subject,
+    text,
+    html,
   };
 
   const info = await transporter.sendMail(mailOptions);

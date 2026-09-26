@@ -36,7 +36,8 @@ export const config = {
     cooldownSeconds: 60,
   },
   email: {
-    provider: process.env.EMAIL_PROVIDER || (process.env.NODE_ENV === 'test' ? 'test' : 'unconfigured'),
+    provider: process.env.EMAIL_PROVIDER || (process.env.RESEND_API_KEY ? 'resend' : (process.env.NODE_ENV === 'test' ? 'test' : 'unconfigured')),
+    resendApiKey: process.env.RESEND_API_KEY || '',
     smtpHost: process.env.SMTP_HOST || '',
     smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
     smtpUser: process.env.SMTP_USER || '',
