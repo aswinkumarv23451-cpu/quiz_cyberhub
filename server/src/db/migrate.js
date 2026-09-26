@@ -108,9 +108,12 @@ async function migrate() {
       `\nMigration complete: ${appliedCount} applied, ${skippedCount} skipped.\n`
     );
   } catch (err) {
-    console.error('\nMigration failed:', err.message);
-    if (err.detail) console.error('Detail:', err.detail);
-    if (err.hint) console.error('Hint:', err.hint);
+    console.error('\nMigration failed:');
+    console.error('  error.name:', err?.name);
+    console.error('  error.code:', err?.code);
+    console.error('  error.message:', err?.message || String(err));
+    if (err?.detail) console.error('  Detail:', err.detail);
+    if (err?.hint) console.error('  Hint:', err.hint);
     process.exit(1);
   } finally {
     await closePool();
