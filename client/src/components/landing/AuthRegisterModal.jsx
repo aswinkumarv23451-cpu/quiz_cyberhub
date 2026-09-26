@@ -75,10 +75,10 @@ export default function AuthRegisterModal({
 
   /* ── Shared style tokens ─────────────────────────────────────────── */
   const inputCls =
-    'w-full px-3 py-2.5 bg-charcoal-950/90 border border-bronze-500/40 rounded-lg text-sm text-parchment-100 placeholder-parchment-500/50 focus:outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400/40 transition';
+    'w-full px-3 py-2.5 bg-parchment-100 border border-bronze-400 rounded-lg text-sm text-black placeholder-charcoal-700/60 focus:outline-none focus:bg-white focus:border-gold-500 focus:ring-1 focus:ring-gold-400/50 transition font-medium auth-modal-input';
 
   const inputSmCls =
-    'w-full px-2.5 py-2 bg-charcoal-950/90 border border-bronze-500/40 rounded-lg text-xs text-parchment-100 placeholder-parchment-500/50 focus:outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400/40 transition';
+    'w-full px-2.5 py-2 bg-parchment-100 border border-bronze-400 rounded-lg text-xs text-black placeholder-charcoal-700/60 focus:outline-none focus:bg-white focus:border-gold-500 focus:ring-1 focus:ring-gold-400/50 transition font-medium auth-modal-input';
 
   const labelCls = 'block text-xs font-semibold text-parchment-200 mb-1.5 tracking-wide';
 
@@ -122,15 +122,15 @@ export default function AuthRegisterModal({
         {/* Modal Header */}
         <div className="text-center space-y-1 mb-6 pr-8">
           <div className="text-[10px] font-mono uppercase tracking-widest text-gold-400">
-            CYBERHUB EXPEDITION PORTAL
+            ROUND 1
           </div>
           <h2 id="auth-modal-title" className="text-2xl font-black tracking-tight text-parchment-100 font-pirate">
-            {activeTab === 'register' ? 'Team Registration' : 'Participant Login'}
+            {activeTab === 'register' ? 'Team Registration' : 'Team Lead Login'}
           </h2>
           <p className="text-xs text-parchment-300/80">
             {activeTab === 'register'
               ? 'Free entry • 2 to 3 members per expedition crew'
-              : 'Secure one-time passcode authentication'}
+              : 'Secure email OTP authentication for verified Team Leads'}
           </p>
         </div>
 
@@ -214,14 +214,6 @@ export default function AuthRegisterModal({
                       </span>
                     </div>
                   )}
-                  {session.event && (
-                    <div className="flex justify-between py-1">
-                      <span className="text-parchment-400">Event Status:</span>
-                      <span className="font-medium text-emerald-400">
-                        {session.event.status}
-                      </span>
-                    </div>
-                  )}
                 </div>
 
                 <button
@@ -237,7 +229,7 @@ export default function AuthRegisterModal({
               <form onSubmit={handleRequestOtp} className="space-y-4">
                 <div>
                   <label htmlFor="modal-email" className={labelCls}>
-                    Registered Email Address
+                    Email
                   </label>
                   <input
                     id="modal-email"
@@ -255,7 +247,7 @@ export default function AuthRegisterModal({
                   disabled={loginLoading || !email.trim()}
                   className={primaryBtnCls}
                 >
-                  {loginLoading ? 'Sending code...' : 'Request Verification Code'}
+                  {loginLoading ? 'Sending OTP...' : 'Send OTP'}
                 </button>
               </form>
             ) : (
@@ -396,8 +388,8 @@ export default function AuthRegisterModal({
               <form onSubmit={handleRegisterSubmit} className="space-y-5">
                 {/* Event Tag */}
                 <div className="text-xs text-gold-300 bg-gold-950/40 p-3 rounded-lg border border-gold-700/40 flex items-center justify-between">
-                  <span>
-                    Event: <span className="font-semibold text-gold-200">{regEventInfo.data?.name || 'Round 1'}</span>
+                  <span className="font-semibold text-gold-200 font-pirate tracking-wide">
+                    Round 1 Registration
                   </span>
                   <span className="font-mono font-bold text-emerald-400">FREE ENTRY</span>
                 </div>

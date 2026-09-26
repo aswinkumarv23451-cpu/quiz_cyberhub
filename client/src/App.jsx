@@ -249,10 +249,10 @@ function App() {
     );
   }
 
-  // Render Participant Quiz Interface when authenticated as TEAM_LEAD
-  if (session?.role === 'TEAM_LEAD') {
+  // Render Participant Experience when authenticated as TEAM_LEAD or MEMBER (pending approval)
+  if (session?.role === 'TEAM_LEAD' || session?.role === 'MEMBER') {
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-950 text-slate-100 font-sans">
+      <main className="min-h-screen flex flex-col items-center justify-center p-3 sm:p-6 bg-charcoal-950 text-parchment-100 font-sans relative overflow-x-hidden">
         <QuizInterface session={session} onLogout={handleLogout} />
       </main>
     );

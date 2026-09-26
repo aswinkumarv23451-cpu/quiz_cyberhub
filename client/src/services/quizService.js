@@ -10,9 +10,12 @@ export async function startQuiz() {
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
   });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!res.ok && !data.notStarted) {
-    throw new Error(data.message || 'Failed to start quiz.');
+    const err = new Error(data.message || 'Failed to start quiz.');
+    err.status = res.status;
+    err.data = data;
+    throw err;
   }
   return data;
 }
@@ -27,9 +30,12 @@ export async function getCurrentQuiz() {
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
   });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!res.ok && !data.notStarted) {
-    throw new Error(data.message || 'Failed to fetch current quiz state.');
+    const err = new Error(data.message || 'Failed to fetch current quiz state.');
+    err.status = res.status;
+    err.data = data;
+    throw err;
   }
   return data;
 }
@@ -37,6 +43,7 @@ export async function getCurrentQuiz() {
 /**
  * Submits an answer for the active question.
  * @param {string} selectedOption - 'A' | 'B' | 'C' | 'D'
+ * @param {string} [questionId] - Question UUID
  * @returns {Promise<Object>}
  */
 export async function submitAnswer(selectedOption, questionId) {
@@ -46,9 +53,12 @@ export async function submitAnswer(selectedOption, questionId) {
     credentials: 'include',
     body: JSON.stringify({ selectedOption, ...(questionId ? { questionId } : {}) }),
   });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.message || 'Failed to submit answer.');
+    const err = new Error(data.message || 'Failed to submit answer.');
+    err.status = res.status;
+    err.data = data;
+    throw err;
   }
   return data;
 }
@@ -64,9 +74,12 @@ export async function skipQuestion() {
     credentials: 'include',
     body: JSON.stringify({}),
   });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.message || 'Failed to skip question.');
+    const err = new Error(data.message || 'Failed to skip question.');
+    err.status = res.status;
+    err.data = data;
+    throw err;
   }
   return data;
 }
