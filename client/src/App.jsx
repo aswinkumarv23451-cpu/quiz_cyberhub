@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { checkHealth } from './services/healthService';
 import { requestOtp, verifyOtp, logout, getMe } from './services/authService';
 import { getRegistrationEvent, registerTeam } from './services/registrationService';
-import AdminDashboard from './components/AdminDashboard';
+import AdminLayout from './components/admin/AdminLayout';
 import QuizInterface from './components/QuizInterface';
 import PublicLandingPage from './components/landing/PublicLandingPage';
 
@@ -242,11 +242,7 @@ function App() {
 
   // Render Admin Dashboard when authenticated as ADMIN
   if (session?.role === 'ADMIN') {
-    return (
-      <main className="min-h-screen p-4 sm:p-6 md:p-8 bg-slate-950 text-slate-100 font-sans flex flex-col items-center justify-start">
-        <AdminDashboard session={session} onLogout={handleLogout} />
-      </main>
-    );
+    return <AdminLayout session={session} onLogout={handleLogout} />;
   }
 
   // Render Participant Experience when authenticated as TEAM_LEAD or MEMBER (pending approval)
