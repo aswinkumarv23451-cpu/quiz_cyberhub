@@ -244,17 +244,17 @@ export const downloadRegistrationsCsv = async (eventId) => {
 
 /**
  * Admin: Resets development/test event data.
- * Permanently removes test teams, members, attempts, answers, and participant users for the selected event.
+ * Permanently removes test teams, members, attempts, answers, and participant users for the current Round 1 event.
  * Sets event status to READY. Questions and admin accounts are preserved.
+ * Internal event UUID is automatically resolved server-side.
  *
- * @param {Object} params
- * @param {string} params.eventId
+ * @param {Object} [params]
  * @param {string} params.confirmation - Must be 'RESET ROUND 1'
  * @returns {Promise<{ success: boolean, message: string, eventId: string, deleted: Object }>}
  */
-export const resetTestEvent = async ({ eventId, confirmation }) => {
+export const resetTestEvent = async ({ confirmation } = {}) => {
   return await apiClient('/api/admin/test-reset', {
     method: 'POST',
-    body: JSON.stringify({ eventId, confirmation }),
+    body: JSON.stringify({ confirmation }),
   });
 };

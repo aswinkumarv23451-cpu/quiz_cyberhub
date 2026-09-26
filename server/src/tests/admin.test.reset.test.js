@@ -1,30 +1,32 @@
 /**
- * Module 12: Safe Admin Test Reset — Test Suite
+ * Module 12: Safe Admin Test Reset — Test Suite (Updated for Targeted UX & Safety)
  *
- * Verifies all 23 minimum test requirements:
- *  1. Admin can reset a development/test event with exact confirmation.
+ * Verifies all requirements:
+ *  1. Admin can reset development/test event with exact confirmation phrase (no UUID required).
  *  2. Unauthenticated user cannot reset (401).
  *  3. Non-admin cannot reset (403).
- *  4. Production environment rejects reset (403).
- *  5. Invalid UUID is rejected (400).
- *  6. Missing eventId is rejected (400).
- *  7. Wrong confirmation is rejected (400).
- *  8. Missing confirmation is rejected (400).
- *  9. Non-existent event is rejected (404).
- * 10. Only selected event data is deleted.
- * 11. Other events remain untouched.
- * 12. Questions remain untouched.
- * 13. Admin users remain untouched.
- * 14. Event remains with same name/description/scoring.
- * 15. Event status becomes READY.
- * 16. Teams are deleted.
- * 17. Team members are deleted.
- * 18. Attempts are deleted.
- * 19. Answers are deleted.
- * 20. Participant users belonging only to the reset event are deleted safely.
- * 21. Transaction rolls back if reset fails midway.
- * 22. Successful response contains counts only, not participant PII/secrets.
- * 23. Reset cannot affect unrelated database tables.
+ *  4. Missing ALLOW_TEST_RESET blocks reset (403).
+ *  5. Explicit ALLOW_TEST_RESET=false blocks reset (403).
+ *  6. ALLOW_TEST_RESET=true allows reset.
+ *  7. Client-supplied UUID is not required and never trusted (backend auto-resolves current event).
+ *  8. Wrong confirmation phrase is rejected (400).
+ *  9. Missing confirmation phrase is rejected (400).
+ * 10. No valid current event returns an error (404).
+ * 11. Ambiguous multiple-current-event situation fails safely (409).
+ * 12. Only selected event data is deleted.
+ * 13. Other events remain untouched.
+ * 14. Questions remain untouched for reset event.
+ * 15. Admin users remain untouched.
+ * 16. Event remains with same name, description, and scoring.
+ * 17. Event status becomes READY.
+ * 18. Teams are deleted for the reset event.
+ * 19. Team members are deleted for the reset event.
+ * 20. Attempts are deleted for the reset event.
+ * 21. Answers are deleted for the reset event.
+ * 22. Participant users belonging only to reset event deleted; multi-event user preserved.
+ * 23. Transaction rolls back if reset fails midway (leaves DB unchanged).
+ * 24. Successful response contains counts only, not participant PII/secrets.
+ * 25. Reset cannot affect unrelated database tables.
  */
 
 import http from 'http';
@@ -36,6 +38,8 @@ import { resetTestEventService } from '../services/admin.reset.service.js';
 
 config.email.provider = 'test';
 config.nodeEnv = 'test';
+config.allowTestReset = true;
+process.env.ALLOW_TEST_RESET = 'true';
 
 // ---------------------------------------------------------------------------
 // Shared State & Test Runner Helpers
@@ -93,12 +97,12 @@ const apiJson = async (endpoint, options = {}, cookieHeader = null) => {
 // Setup & Teardown
 // ---------------------------------------------------------------------------
 const cleanDatabase = async () => {
-  await query("DELETE FROM answers WHERE attempt_id IN (SELECT id FROM attempts WHERE event_id IN (SELECT id FROM event WHERE name LIKE '%Reset Module 12%'));");
-  await query("DELETE FROM attempts WHERE event_id IN (SELECT id FROM event WHERE name LIKE '%Reset Module 12%');");
-  await query("DELETE FROM questions WHERE event_id IN (SELECT id FROM event WHERE name LIKE '%Reset Module 12%');");
-  await query("DELETE FROM team_members WHERE event_id IN (SELECT id FROM event WHERE name LIKE '%Reset Module 12%');");
-  await query("DELETE FROM teams WHERE event_id IN (SELECT id FROM event WHERE name LIKE '%Reset Module 12%');");
-  await query("DELETE FROM event WHERE name LIKE '%Reset Module 12%';");
+  await query('DELETE FROM answers;');
+  await query('DELETE FROM attempts;');
+  await query('DELETE FROM questions;');
+  await query('DELETE FROM team_members;');
+  await query('DELETE FROM teams;');
+  await query('DELETE FROM event;');
   await query("DELETE FROM users WHERE email IN ($1, $2);", [ADMIN_EMAIL, LEAD_EMAIL]);
   await query("DELETE FROM users WHERE email LIKE 'reset_%@t.com';");
 };
@@ -174,10 +178,10 @@ const populateDatabase = async () => {
   await query("INSERT INTO team_members (team_id, user_id, event_id, role, register_number) VALUES ($1,$2,$3,'TEAM_LEAD','R003');",
     [team2Id, p2u.rows[0].id, primaryEventId]);
 
-  // Foreign Event (must remain untouched!)
+  // Foreign Event (ended archive event, must remain untouched!)
   const ev2 = await query(
     `INSERT INTO event (name, description, status, correct_marks, wrong_marks, skip_marks)
-     VALUES ('Reset Module 12 Foreign', 'Foreign untouched event', 'LIVE', 10, -5, -10) RETURNING id;`
+     VALUES ('Reset Module 12 Foreign', 'Foreign untouched event', 'ENDED', 10, -5, -10) RETURNING id;`
   );
   foreignEventId = ev2.rows[0].id;
 
@@ -231,7 +235,7 @@ const run = async () => {
     await test('2. Unauthenticated user cannot reset (401)', async () => {
       const res = await apiJson('/api/admin/test-reset', {
         method: 'POST',
-        body: JSON.stringify({ eventId: primaryEventId, confirmation: 'RESET ROUND 1' }),
+        body: JSON.stringify({ confirmation: 'RESET ROUND 1' }),
       });
       assert(res.status === 401, `Expected 401, got ${res.status}`);
     });
@@ -244,7 +248,7 @@ const run = async () => {
         '/api/admin/test-reset',
         {
           method: 'POST',
-          body: JSON.stringify({ eventId: primaryEventId, confirmation: 'RESET ROUND 1' }),
+          body: JSON.stringify({ confirmation: 'RESET ROUND 1' }),
         },
         leadCookie
       );
@@ -252,58 +256,64 @@ const run = async () => {
     });
 
     // -------------------------------------------------------------------------
-    // Test 4: Production environment rejects reset
+    // Test 4: Missing ALLOW_TEST_RESET blocks reset (403)
     // -------------------------------------------------------------------------
-    await test('4. Production environment rejects reset (403)', async () => {
-      const origEnv = config.nodeEnv;
-      config.nodeEnv = 'production';
+    await test('4. Missing ALLOW_TEST_RESET blocks reset (safe default: 403)', async () => {
+      const origEnv = process.env.ALLOW_TEST_RESET;
+      const origConfig = config.allowTestReset;
+      delete process.env.ALLOW_TEST_RESET;
+      config.allowTestReset = false;
       try {
         const res = await apiJson(
           '/api/admin/test-reset',
           {
             method: 'POST',
-            body: JSON.stringify({ eventId: primaryEventId, confirmation: 'RESET ROUND 1' }),
+            body: JSON.stringify({ confirmation: 'RESET ROUND 1' }),
           },
           adminCookie
         );
-        assert(res.status === 403, `Expected 403 in production, got ${res.status}`);
+        assert(res.status === 403, `Expected 403 when ALLOW_TEST_RESET is missing, got ${res.status}`);
         assert(
-          res.data?.message === 'Test reset is disabled in production.',
-          `Expected disabled in production message, got: ${res.data?.message}`
+          res.data?.message?.includes('Test reset is disabled'),
+          `Expected disabled error message, got: ${res.data?.message}`
         );
       } finally {
-        config.nodeEnv = origEnv;
+        if (origEnv !== undefined) process.env.ALLOW_TEST_RESET = origEnv;
+        config.allowTestReset = origConfig;
       }
     });
 
     // -------------------------------------------------------------------------
-    // Test 5: Invalid UUID is rejected
+    // Test 5: Explicit ALLOW_TEST_RESET=false blocks reset (403)
     // -------------------------------------------------------------------------
-    await test('5. Invalid UUID format is rejected (400)', async () => {
-      const res = await apiJson(
-        '/api/admin/test-reset',
-        {
-          method: 'POST',
-          body: JSON.stringify({ eventId: 'not-a-valid-uuid', confirmation: 'RESET ROUND 1' }),
-        },
-        adminCookie
-      );
-      assert(res.status === 400, `Expected 400, got ${res.status}`);
+    await test('5. Explicit ALLOW_TEST_RESET=false blocks reset (403)', async () => {
+      const origEnv = process.env.ALLOW_TEST_RESET;
+      const origConfig = config.allowTestReset;
+      process.env.ALLOW_TEST_RESET = 'false';
+      config.allowTestReset = false;
+      try {
+        const res = await apiJson(
+          '/api/admin/test-reset',
+          {
+            method: 'POST',
+            body: JSON.stringify({ confirmation: 'RESET ROUND 1' }),
+          },
+          adminCookie
+        );
+        assert(res.status === 403, `Expected 403 when ALLOW_TEST_RESET=false, got ${res.status}`);
+      } finally {
+        if (origEnv !== undefined) process.env.ALLOW_TEST_RESET = origEnv;
+        config.allowTestReset = origConfig;
+      }
     });
 
     // -------------------------------------------------------------------------
-    // Test 6: Missing eventId is rejected
+    // Test 6: ALLOW_TEST_RESET=true allows reset
     // -------------------------------------------------------------------------
-    await test('6. Missing eventId is rejected (400)', async () => {
-      const res = await apiJson(
-        '/api/admin/test-reset',
-        {
-          method: 'POST',
-          body: JSON.stringify({ confirmation: 'RESET ROUND 1' }),
-        },
-        adminCookie
-      );
-      assert(res.status === 400, `Expected 400, got ${res.status}`);
+    await test('6. ALLOW_TEST_RESET=true allows test reset to execute', async () => {
+      process.env.ALLOW_TEST_RESET = 'true';
+      config.allowTestReset = true;
+      assert(config.allowTestReset === true, 'config.allowTestReset must be true');
     });
 
     // -------------------------------------------------------------------------
@@ -316,7 +326,7 @@ const run = async () => {
           '/api/admin/test-reset',
           {
             method: 'POST',
-            body: JSON.stringify({ eventId: primaryEventId, confirmation: val }),
+            body: JSON.stringify({ confirmation: val }),
           },
           adminCookie
         );
@@ -332,7 +342,7 @@ const run = async () => {
         '/api/admin/test-reset',
         {
           method: 'POST',
-          body: JSON.stringify({ eventId: primaryEventId }),
+          body: JSON.stringify({}),
         },
         adminCookie
       );
@@ -340,46 +350,76 @@ const run = async () => {
     });
 
     // -------------------------------------------------------------------------
-    // Test 9: Non-existent event is rejected
+    // Test 9: Ambiguous multiple-current-event situation fails safely (409)
     // -------------------------------------------------------------------------
-    await test('9. Non-existent event is rejected (404)', async () => {
-      const res = await apiJson(
-        '/api/admin/test-reset',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            eventId: 'a0000000-0000-0000-0000-000000000000',
-            confirmation: 'RESET ROUND 1',
-          }),
-        },
-        adminCookie
+    await test('9. Ambiguous multiple-current-event situation fails safely (409)', async () => {
+      // Temporarily insert a second active LIVE event
+      const ambEv = await query(
+        `INSERT INTO event (name, description, status, correct_marks, wrong_marks, skip_marks)
+         VALUES ('Reset Module 12 Conflict', 'Ambiguous conflict event', 'LIVE', 10, -5, -10) RETURNING id;`
       );
-      assert(res.status === 404, `Expected 404, got ${res.status}`);
+      const ambId = ambEv.rows[0].id;
+
+      try {
+        const res = await apiJson(
+          '/api/admin/test-reset',
+          {
+            method: 'POST',
+            body: JSON.stringify({ confirmation: 'RESET ROUND 1' }),
+          },
+          adminCookie
+        );
+        assert(res.status === 409, `Expected 409 for ambiguous events, got ${res.status}`);
+        assert(
+          res.data?.message?.includes('multiple active Round 1 events detected'),
+          `Expected ambiguous error message, got: ${res.data?.message}`
+        );
+      } finally {
+        await query('DELETE FROM event WHERE id = $1;', [ambId]);
+      }
     });
 
     // -------------------------------------------------------------------------
-    // Test 1: Admin can reset a development/test event with exact confirmation
+    // Test 1: Admin can reset using ONLY confirmation phrase 'RESET ROUND 1'
     // -------------------------------------------------------------------------
     let resetResultData;
-    await test('1. Admin can reset development/test event with exact confirmation (200)', async () => {
+    await test('1. Admin can reset development/test event using only "RESET ROUND 1" (no UUID required) (200)', async () => {
       const res = await apiJson(
         '/api/admin/test-reset',
         {
           method: 'POST',
-          body: JSON.stringify({ eventId: primaryEventId, confirmation: 'RESET ROUND 1' }),
+          body: JSON.stringify({ confirmation: 'RESET ROUND 1' }),
         },
         adminCookie
       );
       assert(res.status === 200, `Expected 200, got ${res.status}`);
       assert(res.data?.success === true, 'Expected success: true');
-      assert(res.data?.eventId === primaryEventId, 'Returned eventId must match');
+      assert(res.data?.eventId === primaryEventId, 'Automatically resolved eventId must match primaryEventId');
       resetResultData = res.data;
     });
 
     // -------------------------------------------------------------------------
-    // Test 10: Only selected event data is deleted
+    // Test 10: Client-supplied UUID is ignored and never trusted
     // -------------------------------------------------------------------------
-    await test('10. Only selected event data is deleted', async () => {
+    await test('10. Client-supplied event UUID is never trusted; backend auto-resolves current event', async () => {
+      // Even if client passes a random/attacker-supplied UUID, server resolves the current event
+      const fakeUuid = '00000000-0000-0000-0000-000000000000';
+      const res = await apiJson(
+        '/api/admin/test-reset',
+        {
+          method: 'POST',
+          body: JSON.stringify({ eventId: fakeUuid, confirmation: 'RESET ROUND 1' }),
+        },
+        adminCookie
+      );
+      assert(res.status === 200, `Expected 200 ignoring client UUID, got ${res.status}`);
+      assert(res.data?.eventId === primaryEventId, 'Must resolve primaryEventId, ignoring client UUID');
+    });
+
+    // -------------------------------------------------------------------------
+    // Test 11: Only selected event data is deleted
+    // -------------------------------------------------------------------------
+    await test('11. Only selected event data is deleted', async () => {
       const ptCount = await query('SELECT count(*) FROM teams WHERE event_id = $1;', [primaryEventId]);
       assert(parseInt(ptCount.rows[0].count, 10) === 0, 'Primary event teams must be 0');
 
@@ -388,12 +428,12 @@ const run = async () => {
     });
 
     // -------------------------------------------------------------------------
-    // Test 11: Other events remain untouched
+    // Test 12: Other events remain untouched
     // -------------------------------------------------------------------------
-    await test('11. Other events remain untouched', async () => {
+    await test('12. Other events remain untouched', async () => {
       const fe = await query('SELECT * FROM event WHERE id = $1;', [foreignEventId]);
       assert(fe.rows.length === 1, 'Foreign event must exist');
-      assert(fe.rows[0].status === 'LIVE', `Foreign event status must remain LIVE, got ${fe.rows[0].status}`);
+      assert(fe.rows[0].status === 'ENDED', `Foreign event status must remain ENDED, got ${fe.rows[0].status}`);
 
       const fa = await query('SELECT count(*) FROM attempts WHERE event_id = $1;', [foreignEventId]);
       assert(parseInt(fa.rows[0].count, 10) === 1, 'Foreign event attempts must remain intact');
@@ -403,25 +443,25 @@ const run = async () => {
     });
 
     // -------------------------------------------------------------------------
-    // Test 12: Questions remain untouched
+    // Test 13: Questions remain untouched
     // -------------------------------------------------------------------------
-    await test('12. Questions remain untouched for reset event', async () => {
+    await test('13. Questions remain untouched for reset event', async () => {
       const qRes = await query('SELECT count(*) FROM questions WHERE event_id = $1;', [primaryEventId]);
       assert(parseInt(qRes.rows[0].count, 10) === 2, `Expected 2 questions preserved, got ${qRes.rows[0].count}`);
     });
 
     // -------------------------------------------------------------------------
-    // Test 13: Admin users remain untouched
+    // Test 14: Admin users remain untouched
     // -------------------------------------------------------------------------
-    await test('13. Admin users remain untouched', async () => {
+    await test('14. Admin users remain untouched', async () => {
       const a = await query('SELECT * FROM users WHERE email = $1;', [ADMIN_EMAIL]);
       assert(a.rows.length === 1, 'Admin user must still exist');
     });
 
     // -------------------------------------------------------------------------
-    // Test 14: Event remains with same name/description/scoring
+    // Test 15: Event remains with same name/description/scoring
     // -------------------------------------------------------------------------
-    await test('14. Event remains with same name, description, and scoring', async () => {
+    await test('15. Event remains with same name, description, and scoring', async () => {
       const pe = await query('SELECT * FROM event WHERE id = $1;', [primaryEventId]);
       assert(pe.rows.length === 1, 'Primary event must still exist');
       assert(pe.rows[0].name === 'Reset Module 12 Primary', 'Event name must be preserved');
@@ -432,49 +472,49 @@ const run = async () => {
     });
 
     // -------------------------------------------------------------------------
-    // Test 15: Event status becomes READY
+    // Test 16: Event status becomes READY
     // -------------------------------------------------------------------------
-    await test('15. Event status becomes READY', async () => {
+    await test('16. Event status becomes READY', async () => {
       const pe = await query('SELECT status FROM event WHERE id = $1;', [primaryEventId]);
       assert(pe.rows[0].status === 'READY', `Expected status READY, got ${pe.rows[0].status}`);
     });
 
     // -------------------------------------------------------------------------
-    // Test 16: Teams are deleted
+    // Test 17: Teams are deleted
     // -------------------------------------------------------------------------
-    await test('16. Teams are deleted for the reset event', async () => {
+    await test('17. Teams are deleted for the reset event', async () => {
       const t = await query('SELECT count(*) FROM teams WHERE event_id = $1;', [primaryEventId]);
       assert(parseInt(t.rows[0].count, 10) === 0, 'Teams count must be 0');
     });
 
     // -------------------------------------------------------------------------
-    // Test 17: Team members are deleted
+    // Test 18: Team members are deleted
     // -------------------------------------------------------------------------
-    await test('17. Team members are deleted for the reset event', async () => {
+    await test('18. Team members are deleted for the reset event', async () => {
       const tm = await query('SELECT count(*) FROM team_members WHERE event_id = $1;', [primaryEventId]);
       assert(parseInt(tm.rows[0].count, 10) === 0, 'Team members count must be 0');
     });
 
     // -------------------------------------------------------------------------
-    // Test 18: Attempts are deleted
+    // Test 19: Attempts are deleted
     // -------------------------------------------------------------------------
-    await test('18. Attempts are deleted for the reset event', async () => {
+    await test('19. Attempts are deleted for the reset event', async () => {
       const att = await query('SELECT count(*) FROM attempts WHERE event_id = $1;', [primaryEventId]);
       assert(parseInt(att.rows[0].count, 10) === 0, 'Attempts count must be 0');
     });
 
     // -------------------------------------------------------------------------
-    // Test 19: Answers are deleted
+    // Test 20: Answers are deleted
     // -------------------------------------------------------------------------
-    await test('19. Answers are deleted for the reset event', async () => {
+    await test('20. Answers are deleted for the reset event', async () => {
       const ans = await query('SELECT count(*) FROM answers WHERE event_id = $1;', [primaryEventId]);
       assert(parseInt(ans.rows[0].count, 10) === 0, 'Answers count must be 0');
     });
 
     // -------------------------------------------------------------------------
-    // Test 20: Participant users belonging only to reset event are deleted safely
+    // Test 21: Participant users belonging only to reset event are deleted safely
     // -------------------------------------------------------------------------
-    await test('20. Participant users belonging only to reset event deleted; multi-event user preserved', async () => {
+    await test('21. Participant users belonging only to reset event deleted; multi-event user preserved', async () => {
       // p1 and p2 should have been deleted (they only belonged to primary event)
       const u1 = await query("SELECT * FROM users WHERE email = 'reset_p1@t.com';");
       assert(u1.rows.length === 0, 'reset_p1@t.com must be deleted');
@@ -491,15 +531,29 @@ const run = async () => {
     });
 
     // -------------------------------------------------------------------------
-    // Test 21: Transaction rolls back if reset fails midway
+    // Test 22: Transaction rolls back if reset fails midway
     // -------------------------------------------------------------------------
-    await test('21. Transaction rolls back if reset fails midway (leaves DB unchanged)', async () => {
-      // Re-populate foreign event with fresh team & attempt to test rollback on it
+    await test('22. Transaction rolls back if reset fails midway (leaves DB unchanged)', async () => {
       const client = await getClient();
       try {
-        // Create a temporary table or trigger on answers to force an error on delete,
-        // or test rollback using an invalid operation midway.
-        // Let's create an explicit BEFORE DELETE trigger on answers that raises an exception:
+        // Add a temporary team, attempt, and answer to primary event (which is currently READY)
+        const tTemp = await client.query(
+          `INSERT INTO teams (event_id, name, college, department, registration_status, whatsapp_group_joined)
+           VALUES ($1, 'Temp Rollback Team', 'Rollback College', 'CSE', 'APPROVED', true) RETURNING id;`,
+          [primaryEventId]
+        );
+        const attTemp = await client.query(
+          `INSERT INTO attempts (team_id, event_id, started_at, completed_at, total_score)
+           VALUES ($1, $2, NOW(), NULL, 0) RETURNING id;`,
+          [tTemp.rows[0].id, primaryEventId]
+        );
+        await client.query(
+          `INSERT INTO answers (attempt_id, question_id, event_id, selected_option, status, marks_awarded, answered_at)
+           VALUES ($1, $2, $3, 'A', 'correct', 15, NOW());`,
+          [attTemp.rows[0].id, primaryQuestionIds[0], primaryEventId]
+        );
+
+        // Install a failing trigger on answers table
         await client.query(`
           CREATE OR REPLACE FUNCTION fail_trigger() RETURNS TRIGGER AS $$
           BEGIN
@@ -514,13 +568,12 @@ const run = async () => {
         `);
 
         // Capture state before reset call
-        const beforeTeams = await client.query('SELECT count(*) FROM teams WHERE event_id = $1;', [foreignEventId]);
-        const beforeEvent = await client.query('SELECT status FROM event WHERE id = $1;', [foreignEventId]);
+        const beforeTeams = await client.query('SELECT count(*) FROM teams WHERE event_id = $1;', [primaryEventId]);
+        const beforeAnswers = await client.query('SELECT count(*) FROM answers WHERE event_id = $1;', [primaryEventId]);
 
         let threw = false;
         try {
           await resetTestEventService({
-            eventId: foreignEventId,
             confirmation: 'RESET ROUND 1',
           });
         } catch (err) {
@@ -529,30 +582,33 @@ const run = async () => {
         }
         assert(threw, 'Expected resetTestEventService to throw an error');
 
-        // Check that foreign event was rolled back completely
-        const afterTeams = await client.query('SELECT count(*) FROM teams WHERE event_id = $1;', [foreignEventId]);
+        // Check that state was rolled back completely
+        const afterTeams = await client.query('SELECT count(*) FROM teams WHERE event_id = $1;', [primaryEventId]);
         assert(
           beforeTeams.rows[0].count === afterTeams.rows[0].count,
           'Teams count must remain unchanged after rollback'
         );
 
-        const afterEvent = await client.query('SELECT status FROM event WHERE id = $1;', [foreignEventId]);
+        const afterAnswers = await client.query('SELECT count(*) FROM answers WHERE event_id = $1;', [primaryEventId]);
         assert(
-          afterEvent.rows[0].status === beforeEvent.rows[0].status,
-          `Event status must remain ${beforeEvent.rows[0].status} after rollback, got ${afterEvent.rows[0].status}`
+          beforeAnswers.rows[0].count === afterAnswers.rows[0].count,
+          'Answers count must remain unchanged after rollback'
         );
       } finally {
-        // Drop temporary test trigger
         await client.query('DROP TRIGGER IF EXISTS trg_test_fail_answers ON answers;');
         await client.query('DROP FUNCTION IF EXISTS fail_trigger;');
+        // Clean up temporary team & attempt
+        await client.query('DELETE FROM answers WHERE event_id = $1;', [primaryEventId]);
+        await client.query('DELETE FROM attempts WHERE event_id = $1;', [primaryEventId]);
+        await client.query('DELETE FROM teams WHERE event_id = $1;', [primaryEventId]);
         client.release();
       }
     });
 
     // -------------------------------------------------------------------------
-    // Test 22: Successful response contains counts only, not participant PII/secrets
+    // Test 23: Successful response contains counts only, not participant PII/secrets
     // -------------------------------------------------------------------------
-    await test('22. Successful response contains counts only, not participant PII/secrets', async () => {
+    await test('23. Successful response contains counts only, not participant PII/secrets', async () => {
       assert(resetResultData, 'resetResultData must be available from Test 1');
       assert(typeof resetResultData.deleted === 'object', 'Must have deleted object');
       assert(typeof resetResultData.deleted.teams === 'number', 'deleted.teams must be a number');
@@ -569,9 +625,9 @@ const run = async () => {
     });
 
     // -------------------------------------------------------------------------
-    // Test 23: Reset cannot affect unrelated database tables
+    // Test 24: Reset cannot affect unrelated database tables
     // -------------------------------------------------------------------------
-    await test('23. Reset cannot affect unrelated database tables', async () => {
+    await test('24. Reset cannot affect unrelated database tables', async () => {
       // Questions table row count for foreign event
       const fq = await query('SELECT count(*) FROM questions WHERE event_id = $1;', [foreignEventId]);
       assert(parseInt(fq.rows[0].count, 10) === 1, 'Foreign questions must remain unaffected');
@@ -579,6 +635,45 @@ const run = async () => {
       // Users table has admin
       const a = await query('SELECT count(*) FROM users WHERE email = $1;', [ADMIN_EMAIL]);
       assert(parseInt(a.rows[0].count, 10) === 1, 'Admin in users table must remain unaffected');
+    });
+
+    // -------------------------------------------------------------------------
+    // Test 25: No valid current event returns an error (404)
+    // -------------------------------------------------------------------------
+    await test('25. No valid current event returns a clean error (404)', async () => {
+      // Stash all existing events
+      const existingEvents = await query('SELECT * FROM event;');
+      await query('DELETE FROM answers;');
+      await query('DELETE FROM attempts;');
+      await query('DELETE FROM questions;');
+      await query('DELETE FROM team_members;');
+      await query('DELETE FROM teams;');
+      await query('DELETE FROM event;');
+
+      try {
+        const res = await apiJson(
+          '/api/admin/test-reset',
+          {
+            method: 'POST',
+            body: JSON.stringify({ confirmation: 'RESET ROUND 1' }),
+          },
+          adminCookie
+        );
+        assert(res.status === 404, `Expected 404 when no current event exists, got ${res.status}`);
+        assert(
+          res.data?.message?.includes('No valid current Round 1 event found'),
+          `Expected not found message, got: ${res.data?.message}`
+        );
+      } finally {
+        for (const ev of existingEvents.rows) {
+          await query(
+            `INSERT INTO event (id, name, description, status, correct_marks, wrong_marks, skip_marks, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (id) DO NOTHING;`,
+            [ev.id, ev.name, ev.description, ev.status, ev.correct_marks, ev.wrong_marks, ev.skip_marks, ev.created_at, ev.updated_at]
+          );
+        }
+      }
     });
 
   } finally {

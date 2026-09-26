@@ -12,6 +12,7 @@ const adminEmails = rawAdminEmails
 export const config = {
   port: process.env.PORT || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
+  allowTestReset: process.env.ALLOW_TEST_RESET === 'true',
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   whatsappGroupLink: process.env.WHATSAPP_GROUP_LINK || 'https://chat.whatsapp.com/REPLACE_WITH_ACTUAL_LINK',
   db: {

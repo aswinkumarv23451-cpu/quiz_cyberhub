@@ -4,14 +4,13 @@ import { getRegistrationEvent } from '../services/registrationService';
 
 export default function AdminTestReset({ onResetSuccess }) {
   const [eventData, setEventData] = useState(null);
-  const [selectedEventId, setSelectedEventId] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [isResetting, setIsResetting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  // Fetch current event to pre-populate event selection
+  // Fetch current event to show event context without exposing internal UUID
   const fetchCurrentEvent = async () => {
     try {
       setLoadingEvent(true);
@@ -19,10 +18,9 @@ export default function AdminTestReset({ onResetSuccess }) {
       const res = await getRegistrationEvent();
       if (res?.success && res?.event) {
         setEventData(res.event);
-        setSelectedEventId(res.event.id || '');
       }
-    } catch (err) {
-      setError('Could not automatically detect active event. You can enter the Event UUID manually.');
+    } catch (_) {
+      // Non-blocking: backend automatically resolves event during reset
     } finally {
       setLoadingEvent(false);
     }
@@ -33,10 +31,7 @@ export default function AdminTestReset({ onResetSuccess }) {
   }, []);
 
   const isConfirmationValid = confirmation === 'RESET ROUND 1';
-  const isEventIdValid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    selectedEventId.trim()
-  );
-  const canSubmit = isConfirmationValid && isEventIdValid && !isResetting;
+  const canSubmit = isConfirmationValid && !isResetting;
 
   const handleResetSubmit = async (e) => {
     e.preventDefault();
@@ -48,7 +43,6 @@ export default function AdminTestReset({ onResetSuccess }) {
       setResult(null);
 
       const res = await resetTestEvent({
-        eventId: selectedEventId.trim(),
         confirmation: confirmation.trim(),
       });
 
@@ -78,7 +72,7 @@ export default function AdminTestReset({ onResetSuccess }) {
             <span>🛠️</span> Development Utilities
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Safe operational reset for development and staging environments.
+            Safe operational reset for development, staging, and mock competition testing.
           </p>
         </div>
       </div>
@@ -91,22 +85,43 @@ export default function AdminTestReset({ onResetSuccess }) {
             ⚠️
           </div>
           <div>
-            <h3 className="text-lg font-bold text-rose-300">Reset Test Event</h3>
+            <h3 className="text-lg font-bold text-rose-300">Reset Current Round 1 Test Data</h3>
             <span className="text-xs font-semibold px-2 py-0.5 rounded bg-rose-950 text-rose-400 border border-rose-800 uppercase tracking-wider">
               Destructive Action — Development / Test Only
             </span>
           </div>
         </div>
 
-        {/* Mandatory Safety Notice */}
-        <div className="bg-rose-950/30 border border-rose-800/50 rounded-lg p-4 text-xs text-rose-200/90 leading-relaxed space-y-1">
+        {/* Clear Explanation */}
+        <div className="bg-rose-950/30 border border-rose-800/50 rounded-lg p-4 text-xs text-rose-200/90 leading-relaxed space-y-2">
           <p className="font-semibold text-rose-300">
-            Development/Test use only. This permanently removes test registrations, attempts, answers, and participant accounts for the selected event. Questions and admin accounts are preserved.
+            This operation resets the current Round 1 event data back to a clean state.
           </p>
-          <p className="text-rose-300/70">
-            This endpoint is strictly disabled in production (<code className="text-rose-200">NODE_ENV === "production"</code>).
+          <ul className="list-disc list-inside space-y-1 text-rose-200/80 pl-1">
+            <li>Permanently wipes all test registrations, teams, members, quiz attempts, and answers for Round 1.</li>
+            <li>Restores event lifecycle status to <strong className="text-white">READY</strong> so testing can be repeated.</li>
+            <li>Questions, competition scoring rules, and administrator accounts remain 100% intact.</li>
+          </ul>
+          <p className="text-rose-300/70 pt-1 border-t border-rose-900/50">
+            Protected operation: Disabled by default in production. Only available when <code className="text-rose-200 font-mono">ALLOW_TEST_RESET=true</code>.
           </p>
         </div>
+
+        {/* Current Event Context Banner (Zero UUID Exposure) */}
+        {eventData && (
+          <div className="bg-slate-950/80 border border-slate-800 rounded-lg px-4 py-3 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400">Current Target Event:</span>
+              <span className="text-slate-200 font-semibold">{eventData.name || 'Round 1'}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400">Current Status:</span>
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono uppercase bg-slate-800 text-amber-300 border border-slate-700">
+                {eventData.status}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Error Notice */}
         {error && (
@@ -158,39 +173,11 @@ export default function AdminTestReset({ onResetSuccess }) {
           </div>
         )}
 
-        {/* Reset Form */}
+        {/* Reset Form — Only Confirmation Phrase Required */}
         <form onSubmit={handleResetSubmit} className="space-y-4 pt-2">
-          {/* 1. Event Selection */}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
-              1. Selected Event ID (UUID)
-            </label>
-            {eventData && (
-              <div className="text-xs text-slate-400 mb-1 flex items-center gap-2">
-                <span>Detected Active Event:</span>
-                <span className="text-slate-200 font-semibold">{eventData.name || 'Round 1'}</span>
-                <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 border border-slate-700 uppercase font-mono">
-                  {eventData.status}
-                </span>
-              </div>
-            )}
-            <input
-              type="text"
-              value={selectedEventId}
-              onChange={(e) => setSelectedEventId(e.target.value)}
-              placeholder="e.g. 12345678-1234-1234-1234-123456789abc"
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-rose-500 transition"
-              required
-            />
-            {!isEventIdValid && selectedEventId.length > 0 && (
-              <p className="text-[11px] text-rose-400">Please enter a valid 36-character UUID.</p>
-            )}
-          </div>
-
-          {/* 2. Explicit Confirmation Input */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
-              2. Type <span className="font-mono text-rose-400 font-bold">RESET ROUND 1</span> to confirm
+              Type <span className="font-mono text-rose-400 font-bold">RESET ROUND 1</span> to confirm
             </label>
             <input
               type="text"
@@ -199,13 +186,14 @@ export default function AdminTestReset({ onResetSuccess }) {
               placeholder="Type RESET ROUND 1 to confirm"
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2.5 text-xs text-slate-100 font-mono tracking-wide focus:outline-none focus:border-rose-500 transition"
               required
+              autoComplete="off"
             />
             <p className="text-[11px] text-slate-500">
               Exact match required. Case-sensitive. Leading or trailing spaces will prevent activation.
             </p>
           </div>
 
-          {/* 3. Action Button */}
+          {/* Action Button */}
           <div className="pt-2">
             <button
               type="submit"
@@ -215,11 +203,11 @@ export default function AdminTestReset({ onResetSuccess }) {
               {isResetting ? (
                 <>
                   <span className="animate-spin text-sm">↻</span>
-                  Resetting Test Event...
+                  Resetting Round 1 Test Data...
                 </>
               ) : (
                 <>
-                  <span>🔥</span> Reset Test Event
+                  <span>🔥</span> Reset Round 1 Test Data
                 </>
               )}
             </button>
