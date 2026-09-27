@@ -29,7 +29,7 @@ import http from 'http';
 import assert from 'assert';
 import app from '../app.js';
 import { config } from '../config/env.js';
-import { signToken } from '../services/auth.service.js';
+import { signToken, getCookieOptions, setAuthCookie, clearAuthCookie } from '../services/auth.service.js';
 import { hashOtp, timingSafeEqual, generateSecureOtp } from '../utils/crypto.utils.js';
 import { validateFileIntegrity, paymentProofStorage } from '../services/storage/paymentProofStorage.js';
 import { formatParticipantQuestionResponse } from '../services/quiz.service.js';
@@ -142,6 +142,31 @@ const runSecurityTests = async () => {
       );
     });
 
+    await test('1.8 CORS origin and credentials support for cross-origin frontend', async () => {
+      const originalCors = config.corsOrigin;
+      try {
+        config.corsOrigin = 'https://singular-horse-6400df.netlify.app';
+        const res = await apiRequest('/api/health', {
+          headers: { Origin: 'https://singular-horse-6400df.netlify.app' },
+        });
+        assert.strictEqual(
+          res.headers.get('access-control-allow-origin'),
+          'https://singular-horse-6400df.netlify.app'
+        );
+        assert.strictEqual(
+          res.headers.get('access-control-allow-credentials'),
+          'true'
+        );
+        assert.notStrictEqual(
+          res.headers.get('access-control-allow-origin'),
+          '*',
+          'Must NEVER be wildcard * when credentials: true'
+        );
+      } finally {
+        config.corsOrigin = originalCors;
+      }
+    });
+
     // =========================================================================
     // 2. Authentication & Authorization Enforcement
     // =========================================================================
@@ -165,6 +190,43 @@ const runSecurityTests = async () => {
       });
       assert.strictEqual(res.status, 401);
       assert.strictEqual(res.data?.success, false);
+    });
+
+    await test('2.4 Production auth cookie config enforces SameSite=None and Secure=true', async () => {
+      const prevEnv = config.nodeEnv;
+      const prevSameSite = config.auth.cookieSameSite;
+      const prevSecure = config.auth.cookieSecure;
+      try {
+        config.nodeEnv = 'production';
+        config.auth.cookieSameSite = undefined;
+        config.auth.cookieSecure = undefined;
+
+        const opts = getCookieOptions();
+        assert.strictEqual(opts.httpOnly, true, 'HttpOnly must be true');
+        assert.strictEqual(opts.secure, true, 'Secure must be true in production');
+        assert.strictEqual(opts.sameSite, 'none', 'SameSite must be "none" for cross-origin cookies');
+        assert.strictEqual(opts.path, '/', 'Path must be "/"');
+      } finally {
+        config.nodeEnv = prevEnv;
+        config.auth.cookieSameSite = prevSameSite;
+        config.auth.cookieSecure = prevSecure;
+      }
+    });
+
+    await test('2.5 SameSite=None strictly enforces Secure=true in all environments', async () => {
+      const prevSameSite = config.auth.cookieSameSite;
+      const prevSecure = config.auth.cookieSecure;
+      try {
+        config.auth.cookieSameSite = 'none';
+        config.auth.cookieSecure = undefined;
+
+        const opts = getCookieOptions();
+        assert.strictEqual(opts.sameSite, 'none');
+        assert.strictEqual(opts.secure, true, 'SameSite=none must force Secure=true');
+      } finally {
+        config.auth.cookieSameSite = prevSameSite;
+        config.auth.cookieSecure = prevSecure;
+      }
     });
 
     // =========================================================================

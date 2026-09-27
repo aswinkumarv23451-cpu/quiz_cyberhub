@@ -29,6 +29,9 @@ export const config = {
     adminEmails,
     cookieName: 'round1_token',
     cookieMaxAgeMs: 60 * 60 * 1000, // 1 hour
+    cookieDomain: process.env.COOKIE_DOMAIN || undefined,
+    cookieSameSite: process.env.COOKIE_SAME_SITE || undefined,
+    cookieSecure: process.env.COOKIE_SECURE !== undefined ? process.env.COOKIE_SECURE === 'true' : undefined,
   },
   otp: {
     expiryMinutes: 5,

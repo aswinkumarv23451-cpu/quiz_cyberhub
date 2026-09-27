@@ -16,13 +16,41 @@ const app = express();
 // Disable Express technology fingerprinting
 app.disable('x-powered-by');
 
+// Trust reverse proxy (Render, Cloudflare, AWS ELB) for secure cookie and client IP handling
+app.set('trust proxy', 1);
+
 // Enforce standard defensive HTTP security headers
 app.use(securityHeaders);
+
+// Helper to normalize allowed CORS origins (handles comma-separated list, trims whitespace and trailing slashes)
+const parseCorsOrigins = (rawOrigin) => {
+  if (!rawOrigin) return ['http://localhost:5173'];
+  const origins = typeof rawOrigin === 'string' ? rawOrigin.split(',') : [rawOrigin];
+  return origins
+    .map((o) => (typeof o === 'string' ? o.trim().replace(/\/+$/, '') : o))
+    .filter(Boolean);
+};
 
 // Configure CORS with explicit configured origin and credentials support for HttpOnly cookies
 app.use(
   cors({
-    origin: config.corsOrigin,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, server-to-server, or same-origin)
+      if (!origin) return callback(null, true);
+
+      const allowedOrigins = parseCorsOrigins(config.corsOrigin);
+      const normalizedOrigin = origin.replace(/\/+$/, '');
+
+      if (
+        allowedOrigins.includes(normalizedOrigin) ||
+        (config.nodeEnv !== 'production' &&
+          (normalizedOrigin.startsWith('http://localhost:') || normalizedOrigin.startsWith('http://127.0.0.1:')))
+      ) {
+        return callback(null, true);
+      }
+
+      return callback(null, false);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

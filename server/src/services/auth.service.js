@@ -36,6 +36,37 @@ export const verifyToken = (token) => {
 };
 
 /**
+ * Generates cookie options based on environment and configuration.
+ * For cross-origin frontend-backend deployments (e.g., Netlify -> Render),
+ * production requires SameSite=None and Secure=true with credentials: include.
+ * In development, defaults to SameSite=Lax without Secure for local HTTP development.
+ *
+ * @returns {import('express').CookieOptions}
+ */
+export const getCookieOptions = () => {
+  const isProduction = config.nodeEnv === 'production';
+  const sameSite = (config.auth.cookieSameSite || (isProduction ? 'none' : 'lax')).toLowerCase();
+
+  // SameSite=None strictly requires the Secure flag in all modern browsers
+  const secure = config.auth.cookieSecure !== undefined
+    ? config.auth.cookieSecure
+    : (sameSite === 'none' ? true : isProduction);
+
+  const options = {
+    httpOnly: true,
+    secure,
+    sameSite,
+    path: '/',
+  };
+
+  if (config.auth.cookieDomain) {
+    options.domain = config.auth.cookieDomain;
+  }
+
+  return options;
+};
+
+/**
  * Attaches the authenticated session token to an HttpOnly cookie.
  * Does NOT expose the token to frontend JavaScript.
  *
@@ -44,26 +75,19 @@ export const verifyToken = (token) => {
  */
 export const setAuthCookie = (res, token) => {
   res.cookie(config.auth.cookieName, token, {
-    httpOnly: true,
-    secure: config.nodeEnv === 'production',
-    sameSite: 'lax',
+    ...getCookieOptions(),
     maxAge: config.auth.cookieMaxAgeMs,
-    path: '/',
   });
 };
 
 /**
  * Clears the authentication HttpOnly cookie on logout.
+ * Must match sameSite, secure, path, and domain attributes of setAuthCookie.
  *
  * @param {import('express').Response} res
  */
 export const clearAuthCookie = (res) => {
-  res.clearCookie(config.auth.cookieName, {
-    httpOnly: true,
-    secure: config.nodeEnv === 'production',
-    sameSite: 'lax',
-    path: '/',
-  });
+  res.clearCookie(config.auth.cookieName, getCookieOptions());
 };
 
 /**
