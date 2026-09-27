@@ -19,6 +19,7 @@
     "test:exports": "node src/tests/admin.exports.test.js",
     "test:reset": "node src/tests/admin.test.reset.test.js",
     "test:security": "node src/tests/security.test.js",
+    "test:agentmail": "node src/tests/agentmail.test.js",
     "test": "npm run test:auth && npm run test:registration && npm run test:admin && npm run test:question && npm run test:quiz && npm run test:leaderboard && npm run test:monitoring && npm run test:exports && npm run test:reset && npm run test:security"
   },
   "dependencies": {

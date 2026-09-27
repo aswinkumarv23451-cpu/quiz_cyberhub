@@ -87,28 +87,82 @@ export const sendOtpEmail = async ({ to, otp }) => {
     const inboxId = config.email.agentmailInboxId || config.email.fromAddress || 'default';
     const agentMailEndpoint = `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(inboxId)}/messages/send`;
 
-    const response = await fetch(agentMailEndpoint, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${config.email.agentmailApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        to: [to],
-        subject,
-        text,
-        html,
-      }),
-    });
+    let response;
+    try {
+      response = await fetch(agentMailEndpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.email.agentmailApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: [to],
+          subject,
+          text,
+          html,
+        }),
+      });
+    } catch (networkErr) {
+      // Network-level failure (DNS, timeout, TLS) — safe to log full error
+      console.error('[AgentMail] Network error reaching AgentMail API:', {
+        endpoint: agentMailEndpoint,
+        error: networkErr.message,
+      });
+      throw new Error('AgentMail delivery failed: network error contacting AgentMail API');
+    }
 
-    const data = await response.json().catch(() => ({}));
+    // Safely extract the response body; fall back to empty object on parse failure
+    let data = {};
+    let rawText = '';
+    try {
+      rawText = await response.text();
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch (_parseErr) {
+      // Non-JSON body — rawText preserved for logging
+    }
 
     if (!response.ok) {
-      const errorMsg =
+      // Collect every safe field AgentMail might include in error responses
+      // (message, error, errors array, detail, code) — NEVER log API key or secrets
+      const safeErrorDetail = {
+        httpStatus: response.status,
+        inboxId,                                           // safe: not a secret
+        agentmailMessage: data.message   || undefined,
+        agentmailError:   data.error     || undefined,
+        agentmailErrors:  Array.isArray(data.errors) ? data.errors : undefined,
+        agentmailDetail:  data.detail    || undefined,
+        agentmailCode:    data.code      || undefined,
+        // Include raw body only when JSON parsing failed and body is short
+        rawBody: (!data || Object.keys(data).length === 0) && rawText && rawText.length <= 500
+          ? rawText
+          : undefined,
+      };
+
+      // Strip undefined fields for cleaner logs
+      const cleanDetail = Object.fromEntries(
+        Object.entries(safeErrorDetail).filter(([, v]) => v !== undefined)
+      );
+
+      // Log to server (Render logs) — full diagnostic info, no secrets
+      console.error('[AgentMail] Delivery failed — AgentMail API returned non-2xx response:', cleanDetail);
+
+      // Build a descriptive server-side error message (appears in server logs only)
+      const primaryMsg =
         data.message ||
         data.error ||
-        `AgentMail API error status ${response.status}`;
-      throw new Error(`AgentMail delivery failed: ${errorMsg}`);
+        (Array.isArray(data.errors) && data.errors.length > 0
+          ? JSON.stringify(data.errors)
+          : null) ||
+        data.detail ||
+        `HTTP ${response.status}`;
+
+      // Throw with full context for server logs; caller must NOT forward this to the client
+      const serverError = new Error(
+        `AgentMail delivery failed [HTTP ${response.status}]: ${primaryMsg}`
+      );
+      serverError.agentmailStatus = response.status;
+      serverError.agentmailDetail = cleanDetail;
+      throw serverError;
     }
 
     const messageId = data.message_id || data.id || data.messageId || `am-${Date.now()}`;
