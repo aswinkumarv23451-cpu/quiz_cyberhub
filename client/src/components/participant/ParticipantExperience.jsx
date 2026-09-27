@@ -289,6 +289,7 @@ export default function ParticipantExperience({ session, onLogout }) {
         onCheckStatus={handleManualCheckStatus}
         onLogout={onLogout}
         isChecking={manualChecking}
+        error={errorMessage}
       />
     );
   }

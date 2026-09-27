@@ -1,4 +1,5 @@
-const API_BASE = '/api';
+const BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE = `${BASE_URL}/api`;
 
 /**
  * Starts or resumes the quiz attempt for the authenticated Team Lead.
