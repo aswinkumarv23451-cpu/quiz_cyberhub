@@ -112,7 +112,7 @@ export default function HeroSection({ onOpenRegister, onOpenLogin }) {
               className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-black tracking-tight text-white uppercase font-pirate leading-none"
               style={{ textShadow: '0 2px 24px rgba(0,0,0,0.90), 0 1px 4px rgba(0,0,0,1)' }}
             >
-              ROUND <span style={{ color: '#D4AF37', textShadow: '0 2px 20px rgba(212,175,55,0.55), 0 1px 4px rgba(0,0,0,1)' }}>1</span>
+              CRYPTIC <span style={{ color: '#D4AF37', textShadow: '0 2px 20px rgba(212,175,55,0.55), 0 1px 4px rgba(0,0,0,1)' }}>TIDE</span>
             </h1>
             <h2
               className="text-lg sm:text-2xl md:text-3xl lg:text-4xl font-extrabold tracking-wider sm:tracking-widest text-parchment-100 uppercase font-pirate"

@@ -134,7 +134,7 @@ export default function QuizScreen({
               {/* Prominent Question Counter */}
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="px-2.5 py-0.5 rounded bg-gold-950/80 border border-gold-700/60 text-[10px] font-mono tracking-widest text-gold-300 font-bold uppercase shadow-sm">
-                  ROUND 1
+                  CRYPTIC TIDE
                 </span>
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-xs uppercase tracking-wider text-parchment-400 font-mono">

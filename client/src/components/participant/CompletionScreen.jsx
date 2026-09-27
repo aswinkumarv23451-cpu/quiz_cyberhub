@@ -140,7 +140,7 @@ export default function CompletionScreen({ teamName, onLogout }) {
           {/* Heading & Metadata */}
           <div className="space-y-1.5">
             <span className="text-[11px] font-mono uppercase tracking-widest text-emerald-400 font-bold px-3 py-1 rounded-full bg-emerald-950/70 border border-emerald-800/50 inline-block">
-              VOYAGE COMPLETED • ROUND 1
+              VOYAGE COMPLETED • CRYPTIC TIDE
             </span>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-parchment-100 font-pirate pt-1">
               Expedition Concluded

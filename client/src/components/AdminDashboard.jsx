@@ -197,39 +197,39 @@ export default function AdminDashboard({ session, onLogout }) {
 
   // Event Lifecycle Handlers
   const handleStartRound1 = async () => {
-    if (!window.confirm('Are you sure you want to START Round 1? This will lock question editing and make the quiz LIVE for participants.')) {
+    if (!window.confirm('Are you sure you want to START Cryptic Tide? This will lock question editing and make the quiz LIVE for participants.')) {
       return;
     }
     try {
       const res = await startEvent();
       setActionMessage({
         type: 'success',
-        text: res.message || 'Round 1 is now LIVE!',
+        text: res.message || 'Cryptic Tide is now LIVE!',
       });
       fetchStats();
     } catch (err) {
       setActionMessage({
         type: 'error',
-        text: err.message || 'Failed to start Round 1.',
+        text: err.message || 'Failed to start Cryptic Tide.',
       });
     }
   };
 
   const handleEndRound1 = async () => {
-    if (!window.confirm('Are you sure you want to END Round 1? This will prevent any further quiz answers.')) {
+    if (!window.confirm('Are you sure you want to END Cryptic Tide? This will prevent any further quiz answers.')) {
       return;
     }
     try {
       const res = await endEvent();
       setActionMessage({
         type: 'success',
-        text: res.message || 'Round 1 has ENDED.',
+        text: res.message || 'Cryptic Tide has ENDED.',
       });
       fetchStats();
     } catch (err) {
       setActionMessage({
         type: 'error',
-        text: err.message || 'Failed to end Round 1.',
+        text: err.message || 'Failed to end Cryptic Tide.',
       });
     }
   };
@@ -261,14 +261,14 @@ export default function AdminDashboard({ session, onLogout }) {
             onClick={handleStartRound1}
             className="px-3.5 py-2 text-xs font-semibold text-emerald-300 bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-800/60 rounded-lg transition flex items-center gap-1.5 shadow-sm"
           >
-            <span>▶</span> Start Round 1
+            <span>▶</span> Start Cryptic Tide
           </button>
           <button
             type="button"
             onClick={handleEndRound1}
             className="px-3.5 py-2 text-xs font-semibold text-amber-300 bg-amber-950/50 hover:bg-amber-900/60 border border-amber-800/60 rounded-lg transition flex items-center gap-1.5 shadow-sm"
           >
-            <span>⏹</span> End Round 1
+            <span>⏹</span> End Cryptic Tide
           </button>
           <button
             type="button"

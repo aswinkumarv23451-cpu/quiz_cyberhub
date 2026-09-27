@@ -73,7 +73,7 @@ export default function Footer({ healthStatus, onOpenRegister, onOpenLogin }) {
                   CYBER<span className="text-gold-400">HUB</span>
                 </span>
                 <span className="text-[10px] font-mono text-bronze-300 tracking-widest uppercase block mt-0.5">
-                  ROUND 1 EXPEDITION
+                  CRYPTIC TIDE
                 </span>
               </div>
             </div>
@@ -129,7 +129,7 @@ export default function Footer({ healthStatus, onOpenRegister, onOpenLogin }) {
           <div className="space-y-5">
             <h4 className="text-[11px] font-mono font-bold tracking-[0.2em] text-gold-400 uppercase flex items-center gap-2.5">
               <span className="w-4 h-px bg-gold-500/70" />
-              ROUND 1
+              CRYPTIC TIDE
             </h4>
             <ul className="space-y-3">
               {round1Nav.map((item) => (
@@ -225,7 +225,7 @@ export default function Footer({ healthStatus, onOpenRegister, onOpenLogin }) {
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-7 text-[11px] text-parchment-500/60">
           <div className="flex items-center gap-2">
             <span className="w-1 h-1 rounded-full bg-gold-700/60" />
-            <span>© CyberHub • Round 1 — Official Technology Competition</span>
+            <span>© CyberHub • Cryptic Tide — Official Technology Competition</span>
           </div>
 
           {/* Health Status (preserved) */}

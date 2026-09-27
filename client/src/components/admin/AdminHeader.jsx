@@ -44,7 +44,7 @@ export default function AdminHeader({ session, onLogout, onToggleSidebar }) {
                 CYBERHUB
               </span>
               <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 font-semibold uppercase">
-                ROUND 1
+                CRYPTIC TIDE
               </span>
             </div>
             <h1 className="text-sm sm:text-base font-bold text-slate-100 tracking-tight">

@@ -122,7 +122,7 @@ export default function AuthRegisterModal({
         {/* Modal Header */}
         <div className="text-center space-y-1 mb-6 pr-8">
           <div className="text-[10px] font-mono uppercase tracking-widest text-gold-400">
-            ROUND 1
+            CRYPTIC TIDE
           </div>
           <h2 id="auth-modal-title" className="text-2xl font-black tracking-tight text-parchment-100 font-pirate">
             {activeTab === 'register' ? 'Team Registration' : 'Team Lead Login'}
@@ -389,7 +389,7 @@ export default function AuthRegisterModal({
                 {/* Event Tag */}
                 <div className="text-xs text-gold-300 bg-gold-950/40 p-3 rounded-lg border border-gold-700/40 flex items-center justify-between">
                   <span className="font-semibold text-gold-200 font-pirate tracking-wide">
-                    Round 1 Registration
+                    Cryptic Tide Registration
                   </span>
                   <span className="font-mono font-bold text-emerald-400">FREE ENTRY</span>
                 </div>

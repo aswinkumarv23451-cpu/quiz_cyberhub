@@ -76,7 +76,7 @@ export default function Navbar({ onOpenRegister, onOpenLogin }) {
             href="#hero"
             onClick={(e) => handleNavClick(e, '#hero')}
             className="group flex items-center space-x-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 rounded-md py-1 px-1.5"
-            aria-label="CyberHub Round 1 Home"
+            aria-label="CyberHub Cryptic Tide Home"
           >
             <img
               src={clubInfo.logoPath}
@@ -88,7 +88,7 @@ export default function Navbar({ onOpenRegister, onOpenLogin }) {
                 CYBER<span className="gold-text-gradient">HUB</span>
               </span>
               <span className="text-[10px] tracking-widest text-bronze-400 uppercase -mt-1 font-mono">
-                ROUND 1 EXPEDITION
+                CRYPTIC TIDE
               </span>
             </div>
           </a>

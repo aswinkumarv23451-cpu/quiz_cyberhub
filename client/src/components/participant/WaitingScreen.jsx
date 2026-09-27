@@ -391,7 +391,7 @@ function WaitingScreen({
     <div
       className="ws-page-container"
       role="main"
-      aria-label="Round 1 Waiting Area"
+      aria-label="Cryptic Tide Waiting Area"
     >
       {/* Atmospheric oceanic vignette */}
       <div
@@ -567,7 +567,7 @@ function WaitingScreen({
               textShadow: '0 1px 2px rgba(255,245,215,0.5)',
             }}
           >
-            Round 1 Waiting Area
+            Cryptic Tide Waiting Area
           </h1>
 
           {/* Team Badge — Subdued Navy / Teal Capsule */}
@@ -608,7 +608,7 @@ function WaitingScreen({
               maxWidth: '410px',
             }}
           >
-            Round 1 has not started yet. Please wait for the organizer.
+            Cryptic Tide has not started yet. Please wait for the organizer.
           </p>
 
           {/* Secondary Explanation */}

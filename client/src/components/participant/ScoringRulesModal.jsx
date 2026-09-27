@@ -32,7 +32,7 @@ export default function ScoringRulesModal({
               EXPEDITION BRIEFING
             </span>
             <h2 className="text-2xl font-black tracking-tight text-parchment-100 font-pirate">
-              Round 1 Rules & Scoring
+              Cryptic Tide Rules & Scoring
             </h2>
             <p className="text-xs text-parchment-300">
               Team: <span className="text-gold-300 font-bold">{teamName || 'Your Crew'}</span>
@@ -110,7 +110,7 @@ export default function ScoringRulesModal({
               disabled={starting}
               className="flex-1 py-3.5 px-6 bg-gradient-to-r from-gold-300 via-gold-400 to-gold-500 hover:from-gold-200 hover:to-gold-400 disabled:opacity-50 text-charcoal-950 font-extrabold text-sm rounded-xl transition shadow-lg shadow-gold-900/40 hover:shadow-gold-800/60 uppercase font-pirate tracking-wider focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300"
             >
-              {starting ? 'Embarking on Round 1...' : 'Start Round 1'}
+              {starting ? 'Embarking on Cryptic Tide...' : 'Start Cryptic Tide'}
             </button>
             <button
               type="button"

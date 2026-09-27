@@ -10,7 +10,7 @@ export default function EventsPreview({ onOpenRegister }) {
   const tracks = [
     {
       step: 'STAGE 01',
-      title: 'Round 1: Online Technical Challenge',
+      title: 'Cryptic Tide: Online Technical Challenge',
       format: 'Online Assessment',
       status: 'REGISTRATION OPEN',
       description:
@@ -19,11 +19,11 @@ export default function EventsPreview({ onOpenRegister }) {
     },
     {
       step: 'STAGE 02',
-      title: 'Advanced Qualifier Rounds',
-      format: 'Selective Progression',
+      title: 'Website Recreation Challenge',
+      format: 'Online Website Recreation',
       status: 'UPCOMING',
       description:
-        'Top-ranking teams from Round 1 advance to the next technical phase. Further event announcements and progression criteria will be released to qualified teams.',
+        'Qualified teams from Cryptic Tide advance to Round 2, where they must faithfully recreate a provided website reference — replicating its layout, design, and functionality within the specified time limit.',
       highlight: false,
     },
   ];
@@ -45,7 +45,7 @@ export default function EventsPreview({ onOpenRegister }) {
               EXPEDITION <span className="gold-text-gradient">EVENTS</span>
             </h2>
             <p className="mt-4 text-sm sm:text-base text-parchment-300/80 leading-relaxed font-sans">
-              Round 1 operates as the premier gateway challenge. Teams collaborate online to solve intensive timed problems and earn their position on the official leaderboard.
+              Cryptic Tide operates as the premier gateway challenge. Teams collaborate online to solve intensive timed problems and earn their position on the official leaderboard.
             </p>
           </div>
 
@@ -54,7 +54,7 @@ export default function EventsPreview({ onOpenRegister }) {
             onClick={onOpenRegister}
             className="self-start md:self-auto px-6 py-3 text-xs font-bold tracking-wider text-charcoal-950 bg-gradient-to-r from-gold-300 via-gold-400 to-gold-500 hover:from-gold-200 hover:to-gold-400 rounded-md transition shadow-md shadow-gold-950/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300 uppercase font-sans"
           >
-            ENTER ROUND 1
+            ENTER CRYPTIC TIDE
           </button>
         </div>
 

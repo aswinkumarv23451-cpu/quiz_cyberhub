@@ -84,7 +84,7 @@ export default function AdminLeaderboard() {
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Authoritative Round 1 scoring standings calculated directly by the backend engine.
+            Authoritative Cryptic Tide scoring standings calculated directly by the backend engine.
           </p>
         </div>
 
@@ -121,7 +121,7 @@ export default function AdminLeaderboard() {
       {eventStatus === 'READY' && leaderboard.length === 0 && (
         <div className="p-10 rounded-2xl bg-[#0F172A] border border-slate-800 text-center space-y-3 shadow-lg">
           <div className="text-3xl">⏳</div>
-          <h3 className="text-base font-bold text-slate-100">Round 1 Has Not Started Yet</h3>
+          <h3 className="text-base font-bold text-slate-100">Cryptic Tide Has Not Started Yet</h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
             The leaderboard will become active once the competition is LIVE and teams submit quiz answers.
           </p>

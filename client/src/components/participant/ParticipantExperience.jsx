@@ -172,7 +172,7 @@ export default function ParticipantExperience({ session, onLogout }) {
         onLogout();
         return;
       }
-      setErrorMessage(err.message || 'Failed to start Round 1.');
+      setErrorMessage(err.message || 'Failed to start Cryptic Tide.');
     } finally {
       setStarting(false);
     }
@@ -264,7 +264,7 @@ export default function ParticipantExperience({ session, onLogout }) {
       <div className="w-full max-w-md mx-auto p-8 rounded-2xl bg-charcoal-950/80 border border-gold-800/40 text-center space-y-4 shadow-2xl">
         <div className="animate-spin inline-block w-8 h-8 border-3 border-gold-400 border-t-transparent rounded-full" />
         <p className="text-xs sm:text-sm font-mono text-gold-300 tracking-wider">
-          CONNECTING TO ROUND 1 ENGINE...
+          CONNECTING TO CRYPTIC TIDE ENGINE...
         </p>
       </div>
     );
@@ -300,9 +300,9 @@ export default function ParticipantExperience({ session, onLogout }) {
         <div className="w-16 h-16 rounded-full bg-crimson-950/80 border border-crimson-700 text-crimson-400 flex items-center justify-center text-3xl mx-auto">
           🛑
         </div>
-        <h2 className="text-2xl font-bold font-pirate text-parchment-100">Round 1 Ended</h2>
+        <h2 className="text-2xl font-bold font-pirate text-parchment-100">Cryptic Tide Ended</h2>
         <p className="text-sm text-parchment-300">
-          Round 1 has concluded. Quiz participation is closed.
+          Cryptic Tide has concluded. Quiz participation is closed.
         </p>
         <button
           type="button"

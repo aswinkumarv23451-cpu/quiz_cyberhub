@@ -194,7 +194,7 @@ export default function QuestionManagement() {
             <span className="text-xl">🔒</span>
             <div>
               <div className="text-sm font-semibold">
-                Questions are locked because Round 1 is {eventInfo?.status}.
+                Questions are locked because Cryptic Tide is {eventInfo?.status}.
               </div>
               <div className="text-xs text-amber-400/80 mt-0.5">
                 Question authoring, editing, deletion, and reordering are strictly disabled while the competition is active or concluded.
@@ -231,7 +231,7 @@ export default function QuestionManagement() {
       <div className="bg-slate-900/80 border border-slate-800 p-4 sm:p-5 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h3 className="text-lg font-bold text-slate-100">Round 1 Question Bank</h3>
+            <h3 className="text-lg font-bold text-slate-100">Cryptic Tide Question Bank</h3>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">
               {questions.length} {questions.length === 1 ? 'Question' : 'Questions'}
             </span>
@@ -272,7 +272,7 @@ export default function QuestionManagement() {
           <div className="text-3xl">📝</div>
           <div className="text-slate-300 font-semibold">No questions created yet</div>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            Get started by adding your first multiple-choice question for the Round 1 competition.
+            Get started by adding your first multiple-choice question for the Cryptic Tide competition.
           </p>
           {!isLocked && (
             <button

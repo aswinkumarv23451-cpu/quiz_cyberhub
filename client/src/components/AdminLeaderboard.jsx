@@ -126,7 +126,7 @@ export default function AdminLeaderboard() {
         <div>
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-              <span>🏆</span> Round 1 Leaderboard
+              <span>🏆</span> Cryptic Tide Leaderboard
             </h2>
             {data?.event && (
               <span
@@ -148,7 +148,7 @@ export default function AdminLeaderboard() {
             )}
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Event: <span className="text-slate-300 font-medium">{data?.event?.name || 'Round 1'}</span>
+            Event: <span className="text-slate-300 font-medium">{data?.event?.name || 'Cryptic Tide'}</span>
             {' • '}Correct: <span className="text-emerald-400">+{data?.event?.correctMarks ?? 10}</span>
             {' • '}Wrong: <span className="text-rose-400">{data?.event?.wrongMarks ?? -5}</span>
             {' • '}Skip: <span className="text-amber-400">{data?.event?.skipMarks ?? -10}</span>

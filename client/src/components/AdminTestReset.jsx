@@ -85,7 +85,7 @@ export default function AdminTestReset({ onResetSuccess }) {
             ⚠️
           </div>
           <div>
-            <h3 className="text-lg font-bold text-rose-300">Reset Current Round 1 Test Data</h3>
+            <h3 className="text-lg font-bold text-rose-300">Reset Current Cryptic Tide Test Data</h3>
             <span className="text-xs font-semibold px-2 py-0.5 rounded bg-rose-950 text-rose-400 border border-rose-800 uppercase tracking-wider">
               Destructive Action — Development / Test Only
             </span>
@@ -95,10 +95,10 @@ export default function AdminTestReset({ onResetSuccess }) {
         {/* Clear Explanation */}
         <div className="bg-rose-950/30 border border-rose-800/50 rounded-lg p-4 text-xs text-rose-200/90 leading-relaxed space-y-2">
           <p className="font-semibold text-rose-300">
-            This operation resets the current Round 1 event data back to a clean state.
+            This operation resets the current Cryptic Tide event data back to a clean state.
           </p>
           <ul className="list-disc list-inside space-y-1 text-rose-200/80 pl-1">
-            <li>Permanently wipes all test registrations, teams, members, quiz attempts, and answers for Round 1.</li>
+            <li>Permanently wipes all test registrations, teams, members, quiz attempts, and answers for Cryptic Tide.</li>
             <li>Restores event lifecycle status to <strong className="text-white">READY</strong> so testing can be repeated.</li>
             <li>Questions, competition scoring rules, and administrator accounts remain 100% intact.</li>
           </ul>
@@ -112,7 +112,7 @@ export default function AdminTestReset({ onResetSuccess }) {
           <div className="bg-slate-950/80 border border-slate-800 rounded-lg px-4 py-3 flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
               <span className="text-slate-400">Current Target Event:</span>
-              <span className="text-slate-200 font-semibold">{eventData.name || 'Round 1'}</span>
+              <span className="text-slate-200 font-semibold">{eventData.name || 'Cryptic Tide'}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-slate-400">Current Status:</span>
@@ -203,11 +203,11 @@ export default function AdminTestReset({ onResetSuccess }) {
               {isResetting ? (
                 <>
                   <span className="animate-spin text-sm">↻</span>
-                  Resetting Round 1 Test Data...
+                  Resetting Cryptic Tide Test Data...
                 </>
               ) : (
                 <>
-                  <span>🔥</span> Reset Round 1 Test Data
+                  <span>🔥</span> Reset Cryptic Tide Test Data
                 </>
               )}
             </button>

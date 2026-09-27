@@ -55,7 +55,7 @@ export const eventFlow = [
   },
   {
     step: '02',
-    title: 'Round 1',
+    title: 'Cryptic Tide',
     subtitle: 'Test-Based Selection',
     description:
       'A timed, test-based round conducted through the event website. Tests cover Core CS, Web Security, Problem Solving, and Technical Thinking. Each question has a fixed time limit announced by the organizers.',
@@ -95,26 +95,26 @@ export const rules = [
     ],
   },
   {
-    category: 'Round 1 — Test-Based Selection Round',
+    category: 'Cryptic Tide — Test-Based Selection Round',
     accent: 'indigo',
     items: [
-      'Round 1 is a test-based round conducted through the event website/platform.',
+      'Cryptic Tide is a test-based round conducted through the event website/platform.',
       'Single-tab rule: Participants must remain on the designated test tab throughout the test. Opening or switching to another browser tab is strictly prohibited.',
-      'No external internet access: Participants must not use Google, search engines, other websites, online notes, AI tools, messaging platforms, or any other external internet resource during Round 1.',
+      'No external internet access: Participants must not use Google, search engines, other websites, online notes, AI tools, messaging platforms, or any other external internet resource during Cryptic Tide.',
       'No unauthorized internal access: Participants must not open or use developer tools, browser console, inspect/source code, hidden page content, APIs, or other internal technical features to obtain an unfair advantage.',
       'Participants must not use another device, including a mobile phone, tablet, second computer, or smartwatch, to obtain answers or assistance.',
       'Participants must not communicate with other participants during the test through chat, calls, messages, social media, or any other method.',
       'Question time limit: Each question must be answered within the number of seconds specified by the organizers. The exact time limit will be announced by the organizers.',
       'Copying, screen-sharing, taking unauthorized screenshots, recording the test, or using any method intended to obtain or share answers is prohibited.',
       'Selection for Round 2: Participants who meet the selection criteria announced by the organizers will be shortlisted and allowed to proceed to Round 2.',
-      'If prohibited activity or suspicious behavior is detected, the participant may be disqualified from Round 1 and/or the event.',
+      'If prohibited activity or suspicious behavior is detected, the participant may be disqualified from Cryptic Tide and/or the event.',
     ],
   },
   {
     category: 'Round 2 — Website Creation Challenge',
     accent: 'emerald',
     items: [
-      'Round 2 is accessible only to participants/teams selected from Round 1.',
+      'Round 2 is accessible only to participants/teams selected from Cryptic Tide.',
       "Access Process: No re-registration. Selected teams log in via the team leader's registered email, complete OTP verification, accept Terms & Conditions, select a timeline, then build and submit.",
       'The website must be created according to the selected timeline and the specific instructions provided by the organizers.',
       'A reference image/screenshot or webpage reference will be provided. Participants must use the given reference as the basis for their website design and implementation.',
@@ -152,7 +152,7 @@ export const instructions = [
     ],
   },
   {
-    phase: 'During Round 1',
+    phase: 'During Cryptic Tide',
     icon: 'during',
     steps: [
       'Log in with your registered credentials on the event platform.',
