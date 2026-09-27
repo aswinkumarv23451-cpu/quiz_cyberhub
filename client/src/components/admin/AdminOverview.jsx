@@ -46,7 +46,8 @@ export default function AdminOverview({ onNavigate }) {
       const monRes = await getMonitoringOverview().catch(() => null);
       if (monRes?.stats) {
         setCompletedCount(monRes.stats.completedCount || 0);
-      } else if (monRes?.event) {
+      }
+      if (monRes?.event) {
         setEventData((prev) => ({ ...prev, ...monRes.event }));
       } else if (monRes?.status) {
         setEventData((prev) => ({ ...prev, status: monRes.status }));

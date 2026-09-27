@@ -272,7 +272,7 @@ export default function AdminLeaderboard() {
 
                         {/* Total Duration */}
                         <td className="py-3.5 px-4 font-mono text-slate-400 text-[11px]">
-                          {formatDuration(item.totalTimeTakenSeconds)}
+                          {formatDuration(item.durationSeconds ?? item.totalTimeTakenSeconds)}
                         </td>
                       </tr>
                     );

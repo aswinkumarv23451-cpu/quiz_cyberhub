@@ -442,8 +442,7 @@ export default function AdminMonitoring() {
                   <div>
                     <span className="text-slate-500 block">Questions Answered:</span>
                     <span className="font-bold text-emerald-400">
-                      {teamDetail.attempt?.answeredCount || 0} /{' '}
-                      {teamDetail.event?.totalQuestions || 10}
+                      {teamDetail.team?.progress || '0 / 0'}
                     </span>
                   </div>
                 </div>
@@ -456,16 +455,18 @@ export default function AdminMonitoring() {
                   <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                     {teamDetail.questions?.map((q) => (
                       <div
-                        key={q.questionNumber}
+                        key={q.questionOrder || q.questionId}
                         className="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 flex items-center justify-between font-mono"
                       >
                         <span className="font-semibold text-slate-300">
-                          Question #{q.questionNumber}
+                          Question #{q.questionOrder}
                         </span>
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            q.status === 'ANSWERED'
+                            q.status === 'CORRECT' || q.status === 'ANSWERED'
                               ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                              : q.status === 'WRONG'
+                              ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
                               : q.status === 'SKIPPED'
                               ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
                               : 'bg-slate-800 text-slate-400'
